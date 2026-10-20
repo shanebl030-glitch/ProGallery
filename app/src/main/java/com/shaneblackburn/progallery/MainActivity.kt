@@ -1,30 +1,38 @@
 package com.shaneblackburn.progallery
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.fragment.app.FragmentActivity
+import com.shaneblackburn.progallery.ui.GalleryViewModel
+import com.shaneblackburn.progallery.ui.ProGalleryRoot
+import com.shaneblackburn.progallery.ui.theme.ProGalleryTheme
 
-// Toolchain bootstrap entry point; replaced by the full gallery UI in Milestone 1.
-class MainActivity : ComponentActivity() {
+/**
+ * Single-activity host. Extends FragmentActivity (a ComponentActivity) because the
+ * AndroidX BiometricPrompt used for hidden albums requires it.
+ */
+class MainActivity : FragmentActivity() {
+
+    private val vm: GalleryViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("ProGallery ${BuildConfig.VERSION_NAME}\nCreated By Shane BlackbuRn")
-                    }
-                }
+            val settings by vm.settings.collectAsState()
+            ProGalleryTheme(mode = settings.themeMode, dynamicColor = settings.dynamicColor) {
+                ProGalleryRoot(vm)
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Hidden albums re-lock whenever the app leaves the foreground (not on rotation).
+        if (!isChangingConfigurations) vm.lockHidden()
     }
 }
