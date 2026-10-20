@@ -169,7 +169,7 @@ fun VideoPage(
         if (active) {
             AndroidView(
                 factory = { ctx ->
-                    (LayoutInflater.from(ctx).inflate(com.shaneblackburn.progallery.R.layout.player_view, null) as PlayerView).apply {
+                    (LayoutInflater.from(ctx).inflate(com.shaneblackburn.progallery.R.layout.player_view, android.widget.FrameLayout(ctx), false) as PlayerView).apply {
                         useController = false
                         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                         setOnClickListener { onToggleControls() }

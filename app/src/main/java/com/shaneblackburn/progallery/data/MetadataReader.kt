@@ -117,12 +117,10 @@ class MetadataReader(private val context: Context) {
             val rows = buildList {
                 meta(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()
                     ?.let { add(InfoRow("Bitrate", Formatters.bitrate(it))) }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val frames = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toLongOrNull()
-                    if (frames != null && item.durationMs > 0) {
-                        val fps = frames * 1000.0 / item.durationMs
-                        add(InfoRow("Frame rate", String.format(java.util.Locale.ROOT, "%.2f fps", fps)))
-                    }
+                val frames = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toLongOrNull()
+                if (frames != null && item.durationMs > 0) {
+                    val fps = frames * 1000.0 / item.durationMs
+                    add(InfoRow("Frame rate", String.format(java.util.Locale.ROOT, "%.2f fps", fps)))
                 }
                 meta(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toDoubleOrNull()?.let {
                     add(InfoRow("Capture rate", String.format(java.util.Locale.ROOT, "%.0f fps", it)))

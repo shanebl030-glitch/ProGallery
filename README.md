@@ -4,7 +4,27 @@ A Material 3 photo and video gallery with built-in photo and video editors, for 
 
 Created By Shane BlackbuRn.
 
-**Status:** early development — see `CHANGELOG.md` and `docs/ROADMAP.md`.
+**Status:** v0.1.0 — gallery, viewer and video player. Editors are in progress.
+See `CHANGELOG.md`, `docs/ROADMAP.md` and `docs/TESTING.md` (test report and known limitations).
+
+## Installing on your phone
+1. Download `app-release.apk` (from the GitHub Actions run's *Artifacts*, or the
+   `ci-results` branch).
+2. Copy it to your phone and tap it. If asked, allow your browser/file manager to
+   *install unknown apps*.
+3. Open **ProGallery** and allow photo and video access.
+
+Verify the download (optional): `sha256sum app-release.apk` should match `SHA256SUMS.txt`.
+
+**Updating:** install the newer APK over the old one; settings, favourites and hidden
+albums are kept. **Rolling back:** uninstall, then install the older APK (this resets
+ProGallery's own settings — your photos are never affected).
+
+### Signing note
+CI signs release builds with the GitHub runner's debug key, which can change between
+runs. If an update refuses to install ("package conflicts"), uninstall first. To get
+stable updates, create your own key and add it as repository secrets (planned: see
+ROADMAP) — or build locally with a `keystore.properties` file.
 
 ## Building
 

@@ -309,10 +309,12 @@ private fun FastScroller(
             Box(Modifier.fillMaxSize()) {
                 val y = (progress * trackHeight).roundToInt()
                 if (dragging) {
-                    val label = labelAt(entries, (state.firstVisibleItemIndex - headerOffset).coerceAtLeast(0))
-                    if (label != null) {
+                    val label by remember(entries, headerOffset) {
+                        derivedStateOf { labelAt(entries, (state.firstVisibleItemIndex - headerOffset).coerceAtLeast(0)) }
+                    }
+                    label?.let { text ->
                         Text(
-                            label,
+                            text,
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier
