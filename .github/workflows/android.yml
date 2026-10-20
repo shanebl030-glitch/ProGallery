@@ -1,0 +1,97 @@
+name: Android build
+
+# Builds and tests ProGallery on every push and PR, uploads the APKs as artifacts,
+# and publishes build logs + the debug APK to the `ci-results` branch so they can be
+# inspected without GitHub UI access.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Core unit tests
+        id: core
+        continue-on-error: true
+        run: ./gradlew :core:test --stacktrace 2>&1 | tee core-test.log; exit ${PIPESTATUS[0]}
+
+      - name: App unit tests
+        id: apptest
+        continue-on-error: true
+        run: ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee app-test.log; exit ${PIPESTATUS[0]}
+
+      - name: Assemble debug + release APKs
+        id: assemble
+        continue-on-error: true
+        run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace 2>&1 | tee assemble.log; exit ${PIPESTATUS[0]}
+
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: ./gradlew :app:lintDebug 2>&1 | tee lint.log; exit ${PIPESTATUS[0]}
+
+      - name: Collect results
+        if: always()
+        run: |
+          mkdir -p out
+          cp *.log out/ 2>/dev/null || true
+          find . -path '*/build/test-results/*' -name '*.xml' -exec cp {} out/ \; 2>/dev/null || true
+          cp app/build/reports/lint-results-debug.txt out/ 2>/dev/null || true
+          find app/build/outputs/apk -name '*.apk' -exec cp {} out/ \; 2>/dev/null || true
+          (cd out && sha256sum *.apk > SHA256SUMS.txt 2>/dev/null || true)
+          {
+            echo "commit=${GITHUB_SHA}"
+            echo "run=${GITHUB_RUN_ID}"
+            echo "core_tests=${{ steps.core.outcome }}"
+            echo "app_tests=${{ steps.apptest.outcome }}"
+            echo "assemble=${{ steps.assemble.outcome }}"
+            echo "lint=${{ steps.lint.outcome }}"
+          } > out/SUMMARY.txt
+          cat out/SUMMARY.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: progallery-${{ github.sha }}
+          path: out/
+          retention-days: 30
+
+      - name: Publish to ci-results branch
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          cd out
+          rm -f *-release*.apk   # keep the branch small; release APK is in the artifact
+          git init -q -b ci-results
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add -A
+          git commit -qm "CI results for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ci-results
+
+      - name: Fail if any stage failed
+        if: always()
+        run: |
+          for s in "${{ steps.core.outcome }}" "${{ steps.apptest.outcome }}" "${{ steps.assemble.outcome }}"; do
+            [ "$s" = "success" ] || exit 1
+          done
