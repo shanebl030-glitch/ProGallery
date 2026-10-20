@@ -115,7 +115,8 @@ jobs:
           done
 
   device-tests:
-    runs-on: ubuntu-latest
+    # Pinned: the emulator is known to boot reliably with KVM on Ubuntu 24.04 runners.
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -143,6 +144,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          ram-size: 4096M
+          disk-size: 6000M
+          emulator-boot-timeout: 1200
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: bash .github/scripts/device-tests.sh
