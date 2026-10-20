@@ -36,6 +36,8 @@ Personal-use build. Everything from 0.1.0 is unchanged.
 
 ### Fixed
 - Video editor build error (overlay list type in `ProjectComposer`).
+- Video titles now update every frame (double-buffered overlay); previously the first
+  frame's title state would have stuck for the whole video.
 
 ### Notes
 - Installing 0.2.0 requires uninstalling 0.1.0 once (0.1.0 was signed with a temporary

@@ -222,6 +222,56 @@ class EngineDeviceTest {
         assertTrue(abs(p.durationMs - 4000) <= 300, "duration ${p.durationMs}")
     }
 
+    /** Grabs a frame from an export of [project] at [atMs]. */
+    private fun exportFrame(project: VideoProject, name: String, atMs: Long): Bitmap {
+        val out = File(ctx.cacheDir, "$name.mp4").apply { delete() }
+        val latch = CountDownLatch(1)
+        var error: ExportException? = null
+        instrumentation.runOnMainSync {
+            Transformer.Builder(ctx).setVideoMimeType(MimeTypes.VIDEO_H264)
+                .addListener(object : Transformer.Listener {
+                    override fun onCompleted(composition: Composition, exportResult: ExportResult) = latch.countDown()
+                    override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                        error = exportException; latch.countDown()
+                    }
+                }).build().start(ProjectComposer.build(project), out.absolutePath)
+        }
+        assertTrue(latch.await(240, TimeUnit.SECONDS), "export timed out")
+        error?.let { throw AssertionError("export failed: ${it.errorCodeName}", it) }
+        val mmr = MediaMetadataRetriever()
+        try {
+            mmr.setDataSource(out.absolutePath)
+            return mmr.getFrameAtTime(atMs * 1000, MediaMetadataRetriever.OPTION_CLOSEST)!!
+        } finally { mmr.release(); out.delete() }
+    }
+
+    private fun meanDiff(a: Bitmap, b: Bitmap, y0: Float, y1: Float): Double {
+        var sum = 0L; var n = 0
+        val w = minOf(a.width, b.width)
+        for (y in (a.height * y0).toInt() until (a.height * y1).toInt() step 2) for (x in 0 until w step 2) {
+            val p = a.getPixel(x, y); val q = b.getPixel(x, y)
+            sum += abs(((p shr 16) and 255) - ((q shr 16) and 255)) + abs(((p shr 8) and 255) - ((q shr 8) and 255)) + abs((p and 255) - (q and 255))
+            n++
+        }
+        return sum.toDouble() / n / 3
+    }
+
+    /** Regression: titles must appear during their time range and disappear after it. */
+    @Test fun timedTitleAppearsAndDisappears() {
+        val base = VideoProject(listOf(clip()))
+        val titled = base.copy(texts = listOf(TimedText(7, "TITLE TEST", 0, 1500, size = 0.12f, animation = com.shaneblackburn.progallery.core.video.TextAnimation.NONE)))
+        val plainEarly = exportFrame(base, "44a", 700)
+        val titledEarly = exportFrame(titled, "44b", 700)
+        val plainLate = exportFrame(base, "44c", 3000)
+        val titledLate = exportFrame(titled, "44d", 3000)
+        Shots.save("44_title_visible", titledEarly)
+        Shots.save("45_title_gone", titledLate)
+        val early = meanDiff(plainEarly, titledEarly, 0.72f, 0.98f)
+        val late = meanDiff(plainLate, titledLate, 0.72f, 0.98f)
+        assertTrue(early > 4.0, "title visible while active (diff $early)")
+        assertTrue(late < 2.0, "title gone after its end time (diff $late)")
+    }
+
     @Test fun compositionPlayerPreviewPrepares() {
         val project = VideoProject(listOf(clip().copy(filter = VideoFilter.WARM)), texts = listOf(TimedText(1, "Hi", 0, 2000)))
         val latch = CountDownLatch(1)

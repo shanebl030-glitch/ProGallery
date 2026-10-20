@@ -133,7 +133,10 @@ class TimelineFadeMatrix(private val project: VideoProject) : RgbMatrix {
 @OptIn(UnstableApi::class)
 class TimedTextOverlay(private val project: VideoProject, private val width: Int, private val height: Int) : BitmapOverlay() {
     private var firstUs = Long.MIN_VALUE
-    private val bitmap = Bitmap.createBitmap(max(2, width), max(2, height), Bitmap.Config.ARGB_8888)
+    // Media3 re-uploads the overlay texture only when getBitmap() returns a *different*
+    // Bitmap instance, so alternate between two buffers whenever the content changes.
+    private val buffers = Array(2) { Bitmap.createBitmap(max(2, width), max(2, height), Bitmap.Config.ARGB_8888) }
+    private var current = 0
     private var lastKey: String? = null
     private val settings = OverlaySettings.Builder().build()
 
@@ -144,11 +147,13 @@ class TimedTextOverlay(private val project: VideoProject, private val width: Int
         val key = visible.joinToString("|") { "${it.id}:${(it.alphaAt(t) * 20).roundToInt()}" }
         if (key != lastKey) {
             lastKey = key
-            bitmap.eraseColor(0)
-            val c = Canvas(bitmap)
+            current = 1 - current
+            val bmp = buffers[current]
+            bmp.eraseColor(0)
+            val c = Canvas(bmp)
             visible.forEach { tt -> drawTimedText(c, tt, t, width.toFloat(), height.toFloat()) }
         }
-        return bitmap
+        return buffers[current]
     }
 
     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings = settings
