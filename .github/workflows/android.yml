@@ -31,6 +31,29 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Stable release signing so new versions install over old ones.
+      # Needs repository secrets PROGALLERY_KEYSTORE_B64 and PROGALLERY_KEYSTORE_PASSWORD;
+      # without them the release APK falls back to the (per-run) debug key.
+      - name: Set up release signing
+        env:
+          KEYSTORE_B64: ${{ secrets.PROGALLERY_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.PROGALLERY_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            {
+              echo "storeFile=$RUNNER_TEMP/release.jks"
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=progallery"
+              echo "keyPassword=$KEYSTORE_PASSWORD"
+            } > keystore.properties
+            echo "SIGNING=release-key" >> "$GITHUB_ENV"
+            echo "Release signing key configured."
+          else
+            echo "SIGNING=debug-key" >> "$GITHUB_ENV"
+            echo "::warning::No signing secrets set; release APK is signed with a per-run debug key."
+          fi
+
       - name: Core unit tests
         id: core
         continue-on-error: true
@@ -67,6 +90,7 @@ jobs:
             echo "app_tests=${{ steps.apptest.outcome }}"
             echo "assemble=${{ steps.assemble.outcome }}"
             echo "lint=${{ steps.lint.outcome }}"
+            echo "signing=${SIGNING}"
           } > out/SUMMARY.txt
           cat out/SUMMARY.txt
 

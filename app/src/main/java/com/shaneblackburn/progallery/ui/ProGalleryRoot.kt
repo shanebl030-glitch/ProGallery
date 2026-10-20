@@ -66,6 +66,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.query.SmartCollection
+import com.shaneblackburn.progallery.editor.ui.EditorScreen
 import com.shaneblackburn.progallery.ui.components.ErrorView
 import com.shaneblackburn.progallery.ui.components.LoadingView
 import com.shaneblackburn.progallery.ui.components.MessageView
@@ -342,7 +343,19 @@ private fun NavGraph(
             val source = remember { MediaSource.parse(Uri.decode(entry.arguments?.getString("source").orEmpty())) }
             val id = entry.arguments?.getLong("id") ?: 0L
             val slideshow = entry.arguments?.getBoolean("slideshow") ?: false
-            ViewerScreen(vm, source, id, onBack = { nav.popBackStack() }, startSlideshow = slideshow)
+            ViewerScreen(
+                vm, source, id, onBack = { nav.popBackStack() }, startSlideshow = slideshow,
+                onEdit = { nav.navigate("editor/${it.id}") },
+            )
+        }
+        composable("editor/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+            val id = entry.arguments?.getLong("id") ?: 0L
+            val item = remember(id) { vm.itemsByIds(setOf(id)).firstOrNull() }
+            if (item == null) {
+                LaunchedEffect(Unit) { nav.popBackStack() }
+            } else {
+                EditorScreen(item, onClose = { nav.popBackStack() }, onSaved = { nav.popBackStack() })
+            }
         }
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
@@ -97,6 +98,7 @@ fun ViewerScreen(
     startId: Long,
     onBack: () -> Unit,
     startSlideshow: Boolean = false,
+    onEdit: (MediaItem) -> Unit = {},
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -293,6 +295,9 @@ fun ViewerScreen(
                             if (current.isFavorite) "Remove from favourites" else "Add to favourites",
                             tint = if (current.isFavorite) Color(0xFFFF6B81) else Color.White,
                         )
+                    }
+                    if (current.isImage && !current.isGif) {
+                        IconButton(onClick = { onEdit(current) }) { Icon(Icons.Outlined.Edit, "Edit", tint = Color.White) }
                     }
                     IconButton(onClick = { showInfo = true }) { Icon(Icons.Outlined.Info, "Details", tint = Color.White) }
                     IconButton(onClick = { if (settings.confirmTrash) dialog = "trash" else vm.trash(listOf(current)) }) {
