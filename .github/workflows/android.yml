@@ -81,7 +81,7 @@ jobs:
         if: always() && github.event_name != 'pull_request'
         run: |
           cd out
-          rm -f *-release*.apk   # keep the branch small; release APK is in the artifact
+          rm -f *-debug*.apk   # keep the branch small: ship the minified release APK; debug is in the artifact
           git init -q -b ci-results
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
