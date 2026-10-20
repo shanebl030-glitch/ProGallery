@@ -1,8 +1,9 @@
 name: Android build
 
-# Builds and tests ProGallery on every push and PR, uploads the APKs as artifacts,
-# and publishes build logs + the debug APK to the `ci-results` branch so they can be
-# inspected without GitHub UI access.
+# Builds and tests ProGallery on every push:
+#  - build:        core + app unit tests, debug/release APKs, lint
+#  - device-tests: instrumented UI and engine tests on an Android emulator (with screenshots)
+#  - publish:      combines everything onto the `ci-results` branch for inspection
 
 on:
   push:
@@ -102,21 +103,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: progallery-${{ github.sha }}
+          name: build-out
           path: out/
           retention-days: 30
-
-      - name: Publish to ci-results branch
-        if: always() && github.event_name != 'pull_request'
-        run: |
-          cd out
-          rm -f *-debug*.apk   # keep the branch small: ship the minified release APK; debug is in the artifact
-          git init -q -b ci-results
-          git config user.name "ci-bot"
-          git config user.email "ci-bot@users.noreply.github.com"
-          git add -A
-          git commit -qm "CI results for ${GITHUB_SHA}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ci-results
 
       - name: Fail if any stage failed
         if: always()
@@ -124,3 +113,78 @@ jobs:
           for s in "${{ steps.core.outcome }}" "${{ steps.apptest.outcome }}" "${{ steps.assemble.outcome }}"; do
             [ "$s" = "success" ] || exit 1
           done
+
+  device-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build app and test APKs
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+
+      - name: Run instrumented tests on emulator (Android 14)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: bash .github/scripts/device-tests.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: device-out
+          path: device-out/
+          retention-days: 30
+
+  publish:
+    needs: [build, device-tests]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: build-out
+          path: out
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: device-out
+          path: out/device
+      - name: Publish to ci-results branch
+        run: |
+          mkdir -p out
+          DEV=$(cat out/device/exit_code 2>/dev/null || echo missing)
+          [ "$DEV" = "0" ] && DEVRES=success || DEVRES="failure($DEV)"
+          echo "device_tests=$DEVRES" >> out/SUMMARY.txt
+          cat out/SUMMARY.txt
+          cd out
+          rm -f *-debug*.apk
+          git init -q -b ci-results
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add -A
+          git commit -qm "CI results for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ci-results
+      - name: Fail if build or device tests failed
+        run: |
+          grep -q '^device_tests=success' out/SUMMARY.txt
+          [ "${{ needs.build.result }}" = "success" ]

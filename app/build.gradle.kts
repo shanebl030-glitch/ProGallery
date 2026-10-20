@@ -22,8 +22,8 @@ android {
         applicationId = "com.shaneblackburn.progallery"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -71,6 +71,7 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        animationsDisabled = true
     }
     lint {
         // Report, but don't block the build on, lint findings; CI uploads the report.
@@ -121,6 +122,10 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.uiautomator)
+    androidTestImplementation(libs.kotlin.test.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

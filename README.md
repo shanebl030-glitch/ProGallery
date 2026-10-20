@@ -2,7 +2,7 @@
 
 A Material 3 photo and video gallery with built-in photo and video editors, for Android 10+.
 
-Created By Shane BlackbuRn.
+Created by Shane BlackbuRn.
 
 **Status:** v0.1.0 — gallery, viewer and video player. Editors are in progress.
 See `CHANGELOG.md`, `docs/ROADMAP.md` and `docs/TESTING.md` (test report and known limitations).

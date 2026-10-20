@@ -51,6 +51,14 @@ private val GUIDE: List<Pair<String, List<String>>> = listOf(
         "Hold the compare button to see the original. Undo and redo cover every change.",
         "Save → Save as copy keeps the original. Export options set format (JPEG/PNG/WebP), quality, size and whether to keep photo details or remove location.",
     ),
+    "Editing videos" to listOf(
+        "Open a video and tap the pencil. Your original video is never changed; the result is saved as a new video.",
+        "Scroll the timeline to move the playhead. Tap a clip to select it, then drag its edges to trim.",
+        "Clip tools: split at the playhead, speed (0.25× to 4×, voice pitch kept), volume or mute, rotate, flip, colour, filters, and move earlier or later.",
+        "Add clip joins more videos. Tap the dot between two clips for a fade-through-black or white transition.",
+        "Text adds a timed title; Music adds a background track with volume, loop and fades; Frame changes the shape (1:1, 9:16, 16:9, 4:5); fades in from or out to black or white.",
+        "Export: choose resolution, frame rate, quality and H.264 or HEVC. Export keeps running with a notification if you leave the app, and can be cancelled.",
+    ),
     "Searching" to listOf(
         "Type words from the file or album name, e.g. “holiday”.",
         "Dates: a year (“2024”), a month (“june”), or ranges (“after:2024-01-01”, “before:2024-12-31”).",

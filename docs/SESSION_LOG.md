@@ -15,3 +15,15 @@
 - CI publishes logs + APK to the `ci-results` branch so builds can be inspected from the
   workspace via git.
 - Implemented Milestone 1 (see CHANGELOG 0.1.0).
+
+## 2026-10-21 — Session 3 (v0.2.0, personal use)
+- Shane confirmed v0.1.0 works well on his phone; project stays personal-use only (no Play
+  publishing, ads or billing).
+- Fixed the video editor compile error (Guava ImmutableList type for OverlayEffect).
+- Redesigned the adaptive icon (prototyped as SVG, previewed at 36–192 px with circle,
+  squircle and rounded masks plus themed mode, then converted to vector drawables).
+- Author credit set to exactly "Created by Shane BlackbuRn" via `AppInfo.AUTHOR_CREDIT`.
+- Added an emulator test job to CI (UI Automator + engine tests, screenshots).
+- Confirmed v0.1.0 was signed with a temporary per-run CI key (cert 7dad21ce…), so 0.2.0
+  can't update it in place; the permanent key (SHA-256 B0:0A:A0:37…) is used once the
+  repository secrets are set.

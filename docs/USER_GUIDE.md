@@ -1,5 +1,7 @@
 # ProGallery user guide
 
+Created by Shane BlackbuRn.
+
 The same content is available inside the app under **Library → Settings → User guide**
 (`ui/screens/GuideScreen.kt`). Keep both in sync.
 
@@ -46,6 +48,23 @@ The same content is available inside the app under **Library → Settings → Us
   counts as one step.
 - **Save:** *Save as copy* (default) writes `name_edited.jpg` next to the original.
   *Export options* choose JPEG/PNG/WebP, quality, size, keeping details, removing location.
+
+## Editing videos
+- Open a video and tap the **pencil**. The original is never changed; the result is
+  saved as a new video (`name_edited.mp4`) next to it.
+- Scroll the **timeline** to move the playhead; zoom with the magnifier buttons.
+- Tap a **clip** to select it, drag its edges to **trim**. Clip tools: **Split** at the
+  playhead, **Speed** 0.25×–4× (pitch preserved), **Audio** volume/mute, **Rotate**,
+  **Flip**, **Colour** (brightness, contrast, saturation, warmth), **Filter**, move
+  **Earlier/Later**, **Delete**.
+- **Add clip** joins more videos. Tap the **dot between clips** for a transition (fade
+  through black or white, 0.3–1.5 s).
+- **Text** adds a timed title (fade, slide-up or pop animation). **Music** adds a
+  background track (volume, start point, loop, fade in/out). **Frame** sets 1:1, 9:16,
+  16:9 or 4:5. **Fade in/out** from or to black or white.
+- **Export:** resolution (original down to 480p), frame rate (only lowers), quality,
+  H.264 or HEVC, with an estimated file size. Export continues in the background with a
+  progress notification and a Cancel button.
 
 ## Searching
 - Words match file and album names: `holiday`, `"beach day"`.

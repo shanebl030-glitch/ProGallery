@@ -1,0 +1,192 @@
+package com.shaneblackburn.progallery
+
+import android.content.ContentUris
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.net.Uri
+import android.provider.MediaStore
+import android.util.Log
+import androidx.exifinterface.media.ExifInterface
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.BySelector
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
+import androidx.test.uiautomator.Until
+import java.io.File
+
+/** Seeds and cleans up test media in dedicated "PGTest" folders. */
+object TestMedia {
+    const val PHOTO_DIR = "Pictures/PGTest/"
+    const val VIDEO_DIR = "Movies/PGTest/"
+    val PHOTOS = listOf("pgtest_photo_1.jpg", "pgtest_photo_2.jpg", "pgtest_photo_3.jpg")
+    const val VIDEO = "pgtest_clip.mp4"
+
+    val context: Context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    /** Deletes everything in the test folders (including edited copies and exports). */
+    fun cleanup() {
+        val r = context.contentResolver
+        val files = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        r.query(files, arrayOf(MediaStore.MediaColumns._ID, MediaStore.Files.FileColumns.MEDIA_TYPE),
+            "${MediaStore.MediaColumns.RELATIVE_PATH} IN (?, ?)", arrayOf(PHOTO_DIR, VIDEO_DIR), null)?.use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val isVideo = c.getInt(1) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                val uri = ContentUris.withAppendedId(
+                    if (isVideo) MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                    else MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), id)
+                runCatching { r.delete(uri, null, null) }.onFailure { Log.w("TestMedia", "delete failed $uri", it) }
+            }
+        }
+    }
+
+    fun seed() {
+        cleanup()
+        PHOTOS.forEachIndexed { i, name -> insertPhoto(name, i) }
+        insertVideo()
+    }
+
+    private fun insertPhoto(name: String, index: Int) {
+        val r = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, PHOTO_DIR)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = r.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)!!
+        val bmp = samplePhoto(1600, 1200, index)
+        r.openOutputStream(uri, "w")!!.use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        bmp.recycle()
+        r.openFileDescriptor(uri, "rw")!!.use { pfd ->
+            val exif = ExifInterface(pfd.fileDescriptor)
+            exif.setAttribute(ExifInterface.TAG_MAKE, "ProGalleryTest")
+            exif.setAttribute(ExifInterface.TAG_MODEL, "Emulator Cam")
+            exif.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, "2026:10:01 12:00:0$index")
+            exif.setAttribute(ExifInterface.TAG_F_NUMBER, "1.8")
+            exif.saveAttributes()
+        }
+        r.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+    }
+
+    private fun insertVideo() {
+        val r = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, VIDEO)
+            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, VIDEO_DIR)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = r.insert(MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)!!
+        val testCtx = InstrumentationRegistry.getInstrumentation().context
+        r.openOutputStream(uri, "w")!!.use { out -> testCtx.assets.open(VIDEO).use { it.copyTo(out) } }
+        r.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+    }
+
+    /** Colourful, detailed test image (gradient, shapes, text) so edits are visible. */
+    fun samplePhoto(w: Int, h: Int, seed: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        val palettes = listOf(intArrayOf(0xFF1E88E5.toInt(), 0xFFFFB74D.toInt()), intArrayOf(0xFF43A047.toInt(), 0xFFE1F5FE.toInt()),
+            intArrayOf(0xFF8E24AA.toInt(), 0xFFFF7043.toInt()))
+        val pal = palettes[seed % palettes.size]
+        p.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), pal[0], pal[1], Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+        p.shader = null
+        p.color = Color.argb(255, 255, 235, 150); c.drawCircle(w * 0.75f, h * 0.3f, h * 0.12f, p)
+        p.color = Color.argb(255, 40, 60, 90)
+        c.drawPath(android.graphics.Path().apply {
+            moveTo(0f, h.toFloat()); lineTo(w * 0.3f, h * 0.45f); lineTo(w * 0.55f, h * 0.8f)
+            lineTo(w * 0.75f, h * 0.55f); lineTo(w.toFloat(), h * 0.9f); lineTo(w.toFloat(), h.toFloat()); close()
+        }, p)
+        p.color = Color.WHITE; p.textSize = h * 0.08f
+        c.drawText("PGTest ${seed + 1}", w * 0.05f, h * 0.15f, p)
+        return bmp
+    }
+
+    /** MediaStore uri of an item in the test folders by display name, or null. */
+    fun find(name: String): Uri? {
+        val r = context.contentResolver
+        r.query(MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL),
+            arrayOf(MediaStore.MediaColumns._ID, MediaStore.Files.FileColumns.MEDIA_TYPE),
+            "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} IN (?, ?)",
+            arrayOf(name, PHOTO_DIR, VIDEO_DIR), null)?.use { c ->
+            if (c.moveToFirst()) {
+                val isVideo = c.getInt(1) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                return ContentUris.withAppendedId(
+                    if (isVideo) MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                    else MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), c.getLong(0))
+            }
+        }
+        return null
+    }
+
+    fun waitFor(name: String, timeoutMs: Long): Uri? {
+        val end = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < end) {
+            find(name)?.let { return it }
+            Thread.sleep(500)
+        }
+        return null
+    }
+}
+
+/** Saves screenshots where CI collects them. */
+object Shots {
+    private val dirs: List<File> by lazy {
+        val out = mutableListOf<File>()
+        InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let { out += File(it) }
+        TestMedia.context.getExternalFilesDir("screenshots")?.let { out += it }
+        out
+    }
+
+    fun take(name: String) {
+        Thread.sleep(600) // let animations settle
+        val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
+        save(name, bmp)
+    }
+
+    fun save(name: String, bmp: Bitmap) {
+        for (d in dirs) {
+            runCatching {
+                d.mkdirs()
+                File(d, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }.onFailure { Log.w("Shots", "couldn't save $name to $d", it) }
+        }
+    }
+}
+
+/** UI Automator helpers: wait for and act on on-screen text / content descriptions. */
+class Ui {
+    val device: UiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+    fun launch() {
+        val ctx = TestMedia.context
+        val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)!!
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        ctx.startActivity(intent)
+        check(device.wait(Until.hasObject(By.pkg(ctx.packageName).depth(0)), 15_000)) { "App didn't start" }
+    }
+
+    fun obj(sel: BySelector, timeoutMs: Long = 15_000): UiObject2 =
+        device.wait(Until.findObject(sel), timeoutMs) ?: error("Not found on screen: $sel")
+
+    fun text(t: String, timeoutMs: Long = 15_000) = obj(By.text(t), timeoutMs)
+    fun desc(d: String, timeoutMs: Long = 15_000) = obj(By.desc(d), timeoutMs)
+    fun has(sel: BySelector, timeoutMs: Long = 5_000): Boolean = device.wait(Until.hasObject(sel), timeoutMs)
+
+    fun tapText(t: String) = text(t).click()
+    fun tapDesc(d: String) = desc(d).click()
+
+    fun back() { device.pressBack(); device.waitForIdle() }
+}
+

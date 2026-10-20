@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -46,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.shaneblackburn.progallery.AppInfo
 import com.shaneblackburn.progallery.BuildConfig
 import com.shaneblackburn.progallery.R
 import com.shaneblackburn.progallery.ui.GalleryViewModel
@@ -159,6 +162,15 @@ fun SettingsScreen(
                     modifier = Modifier.clickable(onClick = onOpenAbout),
                 )
             }
+            item {
+                Text(
+                    "ProGallery ${BuildConfig.VERSION_NAME} · ${AppInfo.AUTHOR_CREDIT}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                )
+            }
         }
     }
 
@@ -224,14 +236,15 @@ fun AboutScreen(onBack: () -> Unit) {
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // The real adaptive-icon layers, shown as the launcher would (central 72/108 area).
             Box(
                 Modifier
                     .size(96.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .clip(RoundedCornerShape(26.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(96.dp))
+                Image(painterResource(R.drawable.ic_launcher_background), null, Modifier.requiredSize(144.dp))
+                Image(painterResource(R.drawable.ic_launcher_foreground), "ProGallery icon", Modifier.requiredSize(144.dp))
             }
             Spacer(Modifier.height(16.dp))
             Text("ProGallery", style = MaterialTheme.typography.headlineMedium)
@@ -239,8 +252,18 @@ fun AboutScreen(onBack: () -> Unit) {
                 "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(24.dp))
-            Text("Created By Shane BlackbuRn", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(20.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(50),
+            ) {
+                Text(
+                    AppInfo.AUTHOR_CREDIT,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                )
+            }
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))

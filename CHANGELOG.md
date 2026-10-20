@@ -2,12 +2,44 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
-## [Unreleased]
+## [0.2.0] — 2026-10-21 — photo editor, video editor, new icon
 
-### Added (Milestone 2 groundwork — not yet visible in the app)
-- `core/edit`: non-destructive edit model (geometry, 17 adjustments, 18 looks, tone
-  curves, HSL bands, overlays, frames) and a CPU pixel pipeline that renders in strips
-  (bounded memory, multi-threaded, bit-identical to whole-image rendering). 17 new tests.
+Personal-use build. Everything from 0.1.0 is unchanged.
+
+### Added
+- **Photo editor** (pencil button in the viewer): crop with aspect presets, straighten
+  with auto-zoom, rotate, flip; 17 adjustments (light, colour, detail, effects); 18 filter
+  looks with strength; tone curves (RGB and per channel); HSL for 8 colour ranges; text,
+  drawing (pen, marker, highlighter, eraser, line, arrow, rectangle, oval), stickers;
+  frames; hold-to-compare; undo/redo; save as copy (default) or replace original;
+  export format/quality/size options; photo details (EXIF) kept, optional location removal.
+- **Video editor** (pencil button on videos): timeline with thumbnails, trim, split, speed
+  0.25×–4× with pitch kept, volume/mute, rotate/flip, colour and filters, reorder, add
+  clips, fade-through-black/white transitions, timed titles with animation, background
+  music with loop and fades, fade in/out, aspect frames; live preview using the same
+  pipeline as export; export with resolution/frame rate/quality/H.264 or HEVC, running
+  in a foreground service with progress notification and cancel.
+- **New app icon:** adaptive icon with gradient background, photo-card foreground with a
+  play badge, and a monochrome layer for Android 13+ themed icons. Shown on the About screen.
+- **Author credit** "Created by Shane BlackbuRn" on the About screen and Settings footer
+  (single constant `AppInfo.AUTHOR_CREDIT`, covered by a unit test and a device test).
+- **Device test suite** (runs on an Android 14 emulator in CI): gallery, albums, library,
+  search, viewer, details, video player, About credit, photo editor save, video editor
+  export, rendering/saving/export engines, preview player, launcher icon; screenshots
+  collected for review.
+
+### Changed
+- Version 0.2.0 (versionCode 2).
+- Credit text corrected from "Created By" to "Created by".
+- Export-progress notification uses the monochrome icon (Android requires single-colour
+  small icons).
+
+### Fixed
+- Video editor build error (overlay list type in `ProjectComposer`).
+
+### Notes
+- Installing 0.2.0 requires uninstalling 0.1.0 once (0.1.0 was signed with a temporary
+  CI key). See README "Signing".
 
 ## [0.1.0] — 2026-10-21 — first installable build
 
