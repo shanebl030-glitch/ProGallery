@@ -296,7 +296,7 @@ fun ViewerScreen(
                             tint = if (current.isFavorite) Color(0xFFFF6B81) else Color.White,
                         )
                     }
-                    if (current.isImage && !current.isGif) {
+                    if ((current.isImage && !current.isGif) || current.isVideo) {
                         IconButton(onClick = { onEdit(current) }) { Icon(Icons.Outlined.Edit, "Edit", tint = Color.White) }
                     }
                     IconButton(onClick = { showInfo = true }) { Icon(Icons.Outlined.Info, "Details", tint = Color.White) }

@@ -40,6 +40,17 @@ private val GUIDE: List<Pair<String, List<String>>> = listOf(
         "Videos have play/pause, a seek bar, playback speed (0.25× to 2×), mute and rotate-to-fullscreen.",
         "Use the slideshow button in the menu to play the current album as a slideshow.",
     ),
+    "Editing photos" to listOf(
+        "Open a photo and tap the pencil to edit. Edits never change the original unless you choose “Replace original”.",
+        "Crop: drag the corners or edges, pick an aspect ratio, straighten with the slider, rotate and flip.",
+        "Adjust: light (exposure, brightness, contrast, highlights, shadows, whites, blacks), colour (saturation, vibrance, warmth, tint), detail (sharpen, clarity, denoise) and effects (vignette, blur, grain).",
+        "Filters: 18 looks including black & white, vintage and cinematic. Use the strength slider to tone a filter down.",
+        "Curves and Colour (HSL) give precise control over tones and individual colours.",
+        "Text, Draw and Stickers add overlays. Drag to move, pinch to resize and rotate, double-tap text to change it.",
+        "Frame adds a border, instant-photo frame, rounded corners or square fit.",
+        "Hold the compare button to see the original. Undo and redo cover every change.",
+        "Save → Save as copy keeps the original. Export options set format (JPEG/PNG/WebP), quality, size and whether to keep photo details or remove location.",
+    ),
     "Searching" to listOf(
         "Type words from the file or album name, e.g. “holiday”.",
         "Dates: a year (“2024”), a month (“june”), or ranges (“after:2024-01-01”, “before:2024-12-31”).",

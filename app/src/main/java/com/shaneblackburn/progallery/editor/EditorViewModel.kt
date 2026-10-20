@@ -109,7 +109,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     // ---- editing ----
 
     /** Live change (e.g. while dragging a slider): updates preview, merges into one undo step. */
-    fun preview(change: (EditState) -> EditState) {
+    fun previewChange(change: (EditState) -> EditState) {
         _history.update { it.replaceCurrent(change(it.current)) }
         requestRender()
     }

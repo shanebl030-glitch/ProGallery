@@ -24,6 +24,7 @@ class ProGalleryApp : Application(), ImageLoaderFactory {
     val media by lazy { MediaRepository(this) }
     val actions by lazy { MediaActions(this) }
     val metadata by lazy { MetadataReader(this) }
+    val videoExport by lazy { com.shaneblackburn.progallery.video.VideoExportManager(this) }
 
     /**
      * Coil loader tuned for galleries: a large memory cache for fast back-scrolling,

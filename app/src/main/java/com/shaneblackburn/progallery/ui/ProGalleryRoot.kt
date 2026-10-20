@@ -67,6 +67,7 @@ import androidx.navigation.navArgument
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.query.SmartCollection
 import com.shaneblackburn.progallery.editor.ui.EditorScreen
+import com.shaneblackburn.progallery.video.ui.VideoEditorScreen
 import com.shaneblackburn.progallery.ui.components.ErrorView
 import com.shaneblackburn.progallery.ui.components.LoadingView
 import com.shaneblackburn.progallery.ui.components.MessageView
@@ -354,7 +355,8 @@ private fun NavGraph(
             if (item == null) {
                 LaunchedEffect(Unit) { nav.popBackStack() }
             } else {
-                EditorScreen(item, onClose = { nav.popBackStack() }, onSaved = { nav.popBackStack() })
+                if (item.isVideo) VideoEditorScreen(item, onClose = { nav.popBackStack() })
+                else EditorScreen(item, onClose = { nav.popBackStack() }, onSaved = { nav.popBackStack() })
             }
         }
     }

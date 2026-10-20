@@ -1,0 +1,377 @@
+package com.shaneblackburn.progallery.video.ui
+
+import android.Manifest
+import android.os.Build
+import android.view.LayoutInflater
+import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.ZoomOut
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.transformer.CompositionPlayer
+import androidx.media3.ui.PlayerView
+import com.shaneblackburn.progallery.R
+import com.shaneblackburn.progallery.core.format.Formatters
+import com.shaneblackburn.progallery.core.model.MediaItem
+import com.shaneblackburn.progallery.core.video.TimedText
+import com.shaneblackburn.progallery.ui.theme.ProGalleryTheme
+import com.shaneblackburn.progallery.ui.theme.ThemeMode
+import com.shaneblackburn.progallery.video.ExportState
+import com.shaneblackburn.progallery.video.ProjectComposer
+import com.shaneblackburn.progallery.video.VideoEditorViewModel
+import com.shaneblackburn.progallery.video.VideoExportSettings
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlin.math.roundToInt
+
+@Composable
+fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit) {
+    ProGalleryTheme(mode = ThemeMode.DARK, dynamicColor = false) {
+        Surface(color = Color(0xFF0E0E10), modifier = Modifier.fillMaxSize()) {
+            VideoEditorContent(item, onClose)
+        }
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
+    val vm: VideoEditorViewModel = viewModel()
+    val context = LocalContext.current
+    val history by vm.history.collectAsState()
+    val loading by vm.loading.collectAsState()
+    val error by vm.error.collectAsState()
+    val thumbs by vm.thumbs.collectAsState()
+    val exportState by vm.export.state.collectAsState()
+    val project = history.current
+
+    var selection by remember { mutableStateOf<TimelineSelection?>(null) }
+    var pxPerMs by remember { mutableFloatStateOf(0.06f) } // 60 px per second
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var playing by remember { mutableStateOf(false) }
+    var previewError by remember { mutableStateOf<String?>(null) }
+    var showExport by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
+    var textEdit by remember { mutableStateOf<TimedText?>(null) }
+    var settings by remember { mutableStateOf(VideoExportSettings()) }
+    val scroll = rememberScrollState()
+
+    LaunchedEffect(item.id) { vm.open(item) }
+    LaunchedEffect(error) { error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); vm.clearError() } }
+
+    // ---- Preview player (same Composition as export)
+    val player = remember { CompositionPlayer.Builder(context).build() }
+    DisposableEffect(Unit) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                previewError = "Preview unavailable: ${error.errorCodeName}"
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener); player.release() }
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) player.pause() }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
+    // Rebuild the preview composition shortly after the project stops changing.
+    LaunchedEffect(Unit) {
+        vm.history.map { it.current }
+            .distinctUntilChanged()
+            .debounce(350)
+            .collect { p ->
+                if (p.clips.isEmpty()) return@collect
+                try {
+                    val wasPlaying = player.isPlaying
+                    val pos = positionMs.coerceIn(0, maxOf(0, p.durationMs - 1))
+                    player.setComposition(ProjectComposer.build(p))
+                    player.prepare()
+                    player.seekTo(pos)
+                    if (wasPlaying) player.play()
+                    previewError = null
+                } catch (e: Exception) {
+                    previewError = "Preview unavailable: ${e.message ?: e.javaClass.simpleName}"
+                }
+            }
+    }
+    // Keep the timeline under the playhead while playing.
+    LaunchedEffect(playing) {
+        while (playing) {
+            positionMs = player.currentPosition
+            scroll.scrollTo((positionMs * pxPerMs).roundToInt())
+            delay(33)
+        }
+    }
+    // Scrubbing: user scrolls the timeline → seek.
+    LaunchedEffect(pxPerMs) {
+        snapshotFlow { scroll.value to scroll.isScrollInProgress }.collect { (v, active) ->
+            if (active && !playing) {
+                positionMs = (v / pxPerMs).toLong().coerceIn(0, maxOf(0, vm.project.durationMs))
+                player.seekTo(positionMs)
+            }
+        }
+    }
+
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::addClip) }
+    val pickMusic = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::setMusic) }
+
+    BackHandler {
+        when {
+            exportState is ExportState.Running -> showExport = true
+            history.canUndo -> confirmDiscard = true
+            else -> onClose()
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        // Top bar
+        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { if (history.canUndo) confirmDiscard = true else onClose() }) { Icon(Icons.Filled.Close, "Close") }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = vm::undo, enabled = history.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo") }
+            IconButton(onClick = vm::redo, enabled = history.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Redo") }
+            Spacer(Modifier.weight(1f))
+            Button(onClick = { showExport = true }, enabled = !loading && project.clips.isNotEmpty()) { Text("Export") }
+        }
+
+        // Preview
+        Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black), contentAlignment = Alignment.Center) {
+            if (loading) CircularProgressIndicator()
+            else {
+                AndroidView(
+                    factory = { ctx ->
+                        (LayoutInflater.from(ctx).inflate(R.layout.composition_player_view, FrameLayout(ctx), false) as PlayerView)
+                            .apply { this.player = player }
+                    },
+                    onRelease = { it.player = null },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                previewError?.let {
+                    Text(it, color = Color.White, textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(24.dp).background(Color.Black.copy(alpha = 0.6f)).padding(12.dp))
+                }
+            }
+        }
+
+        // Transport row
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = {
+                if (player.isPlaying) player.pause() else {
+                    if (positionMs >= project.durationMs - 50) player.seekTo(0)
+                    player.play()
+                }
+            }) { Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pause" else "Play") }
+            Text("${Formatters.timecode(positionMs)} / ${Formatters.timecode(project.durationMs)}",
+                style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            IconButton(onClick = { pxPerMs = (pxPerMs / 1.5f).coerceAtLeast(0.005f) }) { Icon(Icons.Outlined.ZoomOut, "Zoom timeline out") }
+            IconButton(onClick = { pxPerMs = (pxPerMs * 1.5f).coerceAtMost(0.6f) }) { Icon(Icons.Outlined.ZoomIn, "Zoom timeline in") }
+        }
+
+        // Timeline
+        VideoTimeline(
+            project = project,
+            thumbs = thumbs,
+            scroll = scroll,
+            pxPerMs = pxPerMs,
+            selection = selection,
+            onSelect = { selection = it },
+            onTrimStart = vm::beginChange,
+            onTrim = { i, s, e -> vm.previewChange { p -> p.updateClip(i) { it.withTrim(s, e) } } },
+            modifier = Modifier.padding(vertical = 6.dp),
+        )
+
+        // Tools
+        Column(Modifier.fillMaxWidth().heightIn(min = 130.dp).navigationBarsPadding()) {
+            when (val sel = selection) {
+                is TimelineSelection.ClipSel -> project.clips.getOrNull(sel.index)?.let { clip ->
+                    ClipTools(
+                        clip = clip,
+                        index = sel.index,
+                        clipCount = project.clips.size,
+                        onSplit = {
+                            val before = project
+                            vm.commit { it.splitAt(positionMs) }
+                            if (vm.project == before) Toast.makeText(context, "Move the playhead inside the clip to split", Toast.LENGTH_SHORT).show()
+                        },
+                        onDelete = {
+                            if (project.clips.size == 1) Toast.makeText(context, "A project needs at least one clip", Toast.LENGTH_SHORT).show()
+                            else { vm.commit { it.removeClip(sel.index) }; selection = null }
+                        },
+                        onMove = { dir ->
+                            val to = sel.index + dir
+                            vm.commit { it.moveClip(sel.index, to) }
+                            if (to in project.clips.indices) selection = TimelineSelection.ClipSel(to)
+                        },
+                        onStart = vm::beginChange,
+                        onPreview = { change -> vm.previewChange { p -> p.updateClip(sel.index, change) } },
+                        onCommit = { change -> vm.commit { p -> p.updateClip(sel.index, change) } },
+                    )
+                }
+                is TimelineSelection.TransitionSel -> TransitionTools(project.transitionAfter(sel.afterIndex)) { t ->
+                    vm.commit { it.setTransition(sel.afterIndex, t) }
+                }
+                is TimelineSelection.TextSel -> project.texts.firstOrNull { it.id == sel.id }?.let { t ->
+                    TextTools(
+                        text = t,
+                        projectDurationMs = project.durationMs,
+                        onEdit = { textEdit = t },
+                        onDelete = { vm.commit { p -> p.copy(texts = p.texts.filterNot { it.id == t.id }) }; selection = null },
+                        onStart = vm::beginChange,
+                        onPreview = { nt -> vm.previewChange { p -> p.copy(texts = p.texts.map { if (it.id == nt.id) nt else it }) } },
+                        onCommit = { nt -> vm.commit { p -> p.copy(texts = p.texts.map { if (it.id == nt.id) nt else it }) } },
+                    )
+                }
+                TimelineSelection.MusicSel -> project.music?.let { m ->
+                    MusicTools(
+                        music = m,
+                        onReplace = { pickMusic.launch(arrayOf("audio/*")) },
+                        onRemove = { vm.commit { it.copy(music = null) }; selection = null },
+                        onStart = vm::beginChange,
+                        onPreview = { nm -> vm.previewChange { it.copy(music = nm) } },
+                        onCommit = { nm -> vm.commit { it.copy(music = nm) } },
+                    )
+                }
+                null -> ProjectTools(
+                    project = project,
+                    onAddClip = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                    onAddText = {
+                        val start = positionMs.coerceIn(0, maxOf(0, project.durationMs - 500))
+                        textEdit = TimedText(0L, "", start, minOf(project.durationMs, start + 3000))
+                    },
+                    onMusic = { pickMusic.launch(arrayOf("audio/*")) },
+                    onCommit = vm::commit,
+                )
+            }
+        }
+    }
+
+    // ---- Dialogs
+    textEdit?.let { t ->
+        TimedTextDialog(
+            initial = t.text,
+            onDismiss = { textEdit = null },
+            onConfirm = { s ->
+                if (t.id == 0L) {
+                    val id = System.nanoTime()
+                    vm.commit { p -> p.copy(texts = p.texts + t.copy(id = id, text = s)) }
+                    selection = TimelineSelection.TextSel(id)
+                } else vm.commit { p -> p.copy(texts = p.texts.map { if (it.id == t.id) it.copy(text = s) else it }) }
+                textEdit = null
+            },
+        )
+    }
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Discard video edits?") },
+            text = { Text("Your changes will be lost. The original video is never changed.") },
+            confirmButton = { TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Discard", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
+        )
+    }
+    if (showExport) {
+        when (val s = exportState) {
+            is ExportState.Running -> AlertDialog(
+                onDismissRequest = { showExport = false },
+                title = { Text("Exporting…") },
+                text = {
+                    Column {
+                        LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        Text("${(s.progress * 100).roundToInt()}% · you can leave this screen; export continues in the background.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showExport = false }) { Text("Hide") } },
+                dismissButton = { TextButton(onClick = { vm.export.cancel() }) { Text("Cancel export", color = MaterialTheme.colorScheme.error) } },
+            )
+            is ExportState.Done -> {
+                LaunchedEffect(s) {
+                    Toast.makeText(context, "Saved ${s.title}", Toast.LENGTH_LONG).show()
+                    vm.export.acknowledge(); showExport = false; onClose()
+                }
+            }
+            is ExportState.Failed -> AlertDialog(
+                onDismissRequest = { vm.export.acknowledge(); showExport = false },
+                title = { Text("Export failed") },
+                text = { Text(s.message) },
+                confirmButton = { TextButton(onClick = { vm.export.acknowledge(); showExport = false }) { Text("OK") } },
+            )
+            ExportState.Cancelled -> LaunchedEffect(Unit) { vm.export.acknowledge(); showExport = false }
+            ExportState.Idle -> ExportSettingsDialog(
+                project = project,
+                settings = settings,
+                onChange = { settings = it },
+                onDismiss = { showExport = false },
+                onExport = {
+                    if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    player.pause()
+                    vm.startExport(settings)
+                },
+            )
+        }
+    }
+}

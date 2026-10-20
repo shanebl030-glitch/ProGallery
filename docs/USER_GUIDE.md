@@ -29,6 +29,24 @@ The same content is available inside the app under **Library → Settings → Us
 - Videos: play/pause, ±10 seconds, seek bar, speed 0.25×–2×, mute, rotate to landscape.
 - **Slideshow** from the viewer menu or an album's top bar.
 
+## Editing photos
+- Open a photo and tap the **pencil**. The original is never changed unless you pick
+  **Save → Replace original…** (Android also asks you to confirm).
+- **Crop:** drag corners/edges, aspect presets (Free, Original, 1:1, 4:5, 3:4, 2:3, 9:16,
+  4:3, 3:2, 16:9), straighten (±45° with automatic zoom so no blank corners), rotate, flip.
+- **Adjust:** exposure, brightness, contrast, highlights, shadows, whites, blacks,
+  saturation, vibrance, warmth, tint, sharpen, clarity, denoise, vignette, blur, grain.
+- **Filters:** 18 looks with a strength slider.
+- **Curves:** RGB or per-channel; tap to add a point, drag, double-tap to remove.
+- **Colour:** hue, saturation and luminance for eight colour ranges.
+- **Text / Draw / Stickers:** drag to move, pinch to resize and rotate; double-tap text to
+  edit. Draw has pen, marker, highlighter, eraser, line, arrow, rectangle and oval.
+- **Frame:** border, instant photo, rounded, square fit; colour, thickness, corner radius.
+- **Compare:** hold the compare button. **Undo/redo** covers everything; a slider drag
+  counts as one step.
+- **Save:** *Save as copy* (default) writes `name_edited.jpg` next to the original.
+  *Export options* choose JPEG/PNG/WebP, quality, size, keeping details, removing location.
+
 ## Searching
 - Words match file and album names: `holiday`, `"beach day"`.
 - Dates: `2024`, `june`, `after:2024-01-01`, `before:2024-12-31`.

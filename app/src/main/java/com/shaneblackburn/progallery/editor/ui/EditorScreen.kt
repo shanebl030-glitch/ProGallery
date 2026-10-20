@@ -193,7 +193,7 @@ private fun EditorContent(item: MediaItem, onClose: () -> Unit, onSaved: (Uri?) 
     fun updateOverlay(o: Overlay, live: Boolean) {
         val change: (com.shaneblackburn.progallery.core.edit.EditState) -> com.shaneblackburn.progallery.core.edit.EditState =
             { s -> s.copy(overlays = s.overlays.map { if (it.id == o.id) o else it }) }
-        if (live) vm.preview(change) else vm.commit(change)
+        if (live) vm.previewChange(change) else vm.commit(change)
     }
     fun removeOverlay(id: Long) { vm.commit { s -> s.copy(overlays = s.overlays.filterNot { it.id == id }) }; selectedOverlay = null }
     fun newId() = System.nanoTime()
@@ -255,7 +255,7 @@ private fun EditorContent(item: MediaItem, onClose: () -> Unit, onSaved: (Uri?) 
                                 image = base,
                                 crop = state.geometry.crop,
                                 aspect = ratio,
-                                onCropChange = { c -> vm.preview { s -> s.copy(geometry = s.geometry.copy(crop = c)) } },
+                                onCropChange = { c -> vm.previewChange { s -> s.copy(geometry = s.geometry.copy(crop = c)) } },
                                 onGestureStart = vm::beginChange,
                             )
                         }
@@ -273,26 +273,26 @@ private fun EditorContent(item: MediaItem, onClose: () -> Unit, onSaved: (Uri?) 
                             onUpdate = { updateOverlay(it, live = true) },
                             onStrokeStart = { p ->
                                 val id = newId()
-                                vm.preview { s ->
+                                vm.previewChange { s ->
                                     s.copy(overlays = s.overlays + Overlay.Stroke(id, listOf(p), drawSettings.color, drawSettings.width, drawSettings.brush))
                                 }
                                 id
                             },
                             onStrokeAdd = { id, p ->
-                                vm.preview { s ->
+                                vm.previewChange { s ->
                                     s.copy(overlays = s.overlays.map { if (it.id == id && it is Overlay.Stroke) it.copy(points = it.points + p) else it })
                                 }
                             },
                             onShapeStart = { p ->
                                 val id = newId()
                                 val kind = drawSettings.shape ?: com.shaneblackburn.progallery.core.edit.ShapeKind.LINE
-                                vm.preview { s ->
+                                vm.previewChange { s ->
                                     s.copy(overlays = s.overlays + Overlay.Shape(id, kind, p, p, drawSettings.color, drawSettings.width / 1.5f, drawSettings.filled))
                                 }
                                 id
                             },
                             onShapeDrag = { id, p ->
-                                vm.preview { s -> s.copy(overlays = s.overlays.map { if (it.id == id && it is Overlay.Shape) it.copy(end = p) else it }) }
+                                vm.previewChange { s -> s.copy(overlays = s.overlays.map { if (it.id == id && it is Overlay.Shape) it.copy(end = p) else it }) }
                             },
                             onDoubleTapText = { textDialog = it },
                         )
@@ -314,11 +314,11 @@ private fun EditorContent(item: MediaItem, onClose: () -> Unit, onSaved: (Uri?) 
         Column(Modifier.fillMaxWidth().heightIn(min = 150.dp).padding(top = 4.dp)) {
             if (ready != null) {
                 when (tool) {
-                    EditorTool.CROP -> CropPanel(state, ready.width, ready.height, aspect, { aspect = it }, vm::beginChange, vm::preview, vm::commit)
-                    EditorTool.ADJUST -> AdjustPanel(state, vm::beginChange, vm::preview, vm::commit)
-                    EditorTool.FILTERS -> FiltersPanel(state, original, vm::beginChange, vm::preview, vm::commit)
-                    EditorTool.CURVES -> CurvesPanel(state, vm::beginChange, vm::preview, vm::commit)
-                    EditorTool.COLOR -> HslPanel(state, vm::beginChange, vm::preview, vm::commit)
+                    EditorTool.CROP -> CropPanel(state, ready.width, ready.height, aspect, { aspect = it }, vm::beginChange, vm::previewChange, vm::commit)
+                    EditorTool.ADJUST -> AdjustPanel(state, vm::beginChange, vm::previewChange, vm::commit)
+                    EditorTool.FILTERS -> FiltersPanel(state, original, vm::beginChange, vm::previewChange, vm::commit)
+                    EditorTool.CURVES -> CurvesPanel(state, vm::beginChange, vm::previewChange, vm::commit)
+                    EditorTool.COLOR -> HslPanel(state, vm::beginChange, vm::previewChange, vm::commit)
                     EditorTool.TEXT -> {
                         val sel = overlays.firstOrNull { it.id == selectedOverlay } as? Overlay.Text
                         TextPanel(
@@ -350,7 +350,7 @@ private fun EditorContent(item: MediaItem, onClose: () -> Unit, onSaved: (Uri?) 
                         },
                         onDelete = { removeOverlay(it.id) },
                     )
-                    EditorTool.FRAME -> FramePanel(state, vm::beginChange, vm::preview, vm::commit)
+                    EditorTool.FRAME -> FramePanel(state, vm::beginChange, vm::previewChange, vm::commit)
                 }
             }
         }
