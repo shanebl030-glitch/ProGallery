@@ -83,6 +83,11 @@ jobs:
           cp app/build/reports/lint-results-debug.txt out/ 2>/dev/null || true
           find app/build/outputs/apk -name '*.apk' -exec cp {} out/ \; 2>/dev/null || true
           (cd out && sha256sum *.apk > SHA256SUMS.txt 2>/dev/null || true)
+          # Record the signing certificate of each APK (to verify update compatibility).
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          for f in out/*.apk; do
+            [ -n "$APKSIGNER" ] && { echo "== $(basename $f)"; $APKSIGNER verify --print-certs "$f" | grep -E 'SHA-256'; } >> out/SIGNING.txt || true
+          done
           {
             echo "commit=${GITHUB_SHA}"
             echo "run=${GITHUB_RUN_ID}"

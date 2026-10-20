@@ -14,6 +14,7 @@ import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.effect.SpeedChangeEffect
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
@@ -93,7 +94,7 @@ object ProjectComposer {
 
         val compositionVideoEffects = buildList<Effect> {
             if (TimelineFadeMatrix.needed(project)) add(TimelineFadeMatrix(project))
-            if (project.texts.isNotEmpty()) add(OverlayEffect(ImmutableList.of(TimedTextOverlay(project, outW, outH))))
+            if (project.texts.isNotEmpty()) add(OverlayEffect(ImmutableList.of<TextureOverlay>(TimedTextOverlay(project, outW, outH))))
             if (settings.frameRate > 0) add(FrameDropEffect.createDefaultFrameDropEffect(settings.frameRate.toFloat()))
         }
 
