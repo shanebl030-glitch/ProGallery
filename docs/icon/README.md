@@ -1,13 +1,19 @@
-# App icon source
+# App icon
 
-`layers.py` holds the icon geometry (108×108 adaptive canvas) as SVG; `render.py` renders
-`preview.png` (circle, squircle and rounded masks at 36–192 px, themed mode, light wallpaper)
-with headless Chromium. The Android resources mirror this geometry exactly:
+`source_icon.png` is Shane's ProGallery icon design (1254×1254, with wordmark).
 
-- `app/src/main/res/drawable/ic_launcher_background.xml` — gradient + glow
-- `app/src/main/res/drawable/ic_launcher_foreground.xml` — cards, sunset photo, play badge
-  (group transform = `FG_TF`)
-- `app/src/main/res/drawable/ic_launcher_monochrome.xml` — themed icon (`MONO_TF`)
-- `app/src/main/res/mipmap-anydpi/ic_launcher*.xml` — adaptive-icon wiring
+Android adaptive icons are masked to the launcher's shape (circle, squircle, …), so the
+launcher icon is generated from the design rather than used as one flat image:
 
-Keep all artwork inside the 66 dp safe circle (radius 33 around 54,54).
+- **Foreground** — the cards-and-aperture artwork cut out from the design (flood-fill from
+  the crop edge removes the navy background and frame glow) and scaled so it sits inside
+  the 66 dp safe zone.
+- **Background** — navy gradient matched to the design's interior.
+- **Monochrome** — single-colour silhouette for Android 13+ themed icons.
+- The **wordmark** is omitted from the launcher icon (illegible at launcher size; the
+  launcher shows the app name). The full design, wordmark included, is shown on the
+  About screen (`res/drawable-nodpi/about_logo.webp`).
+
+Regenerate: `python3 make_layers.py` (in a folder containing `source.png`), then
+`python3 preview.py` for `preview.png`; copy the outputs into `res/mipmap-*/` at
+108/162/216/324/432 px (mdpi→xxxhdpi). `compare.png` shows original vs launcher icon.

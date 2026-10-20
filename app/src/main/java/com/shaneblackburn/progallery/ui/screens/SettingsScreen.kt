@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -236,18 +235,13 @@ fun AboutScreen(onBack: () -> Unit) {
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // The real adaptive-icon layers, shown as the launcher would (central 72/108 area).
-            Box(
-                Modifier
-                    .size(96.dp)
-                    .clip(RoundedCornerShape(26.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(painterResource(R.drawable.ic_launcher_background), null, Modifier.requiredSize(144.dp))
-                Image(painterResource(R.drawable.ic_launcher_foreground), "ProGallery icon", Modifier.requiredSize(144.dp))
-            }
-            Spacer(Modifier.height(16.dp))
-            Text("ProGallery", style = MaterialTheme.typography.headlineMedium)
+            // Shane's full ProGallery logo (with wordmark).
+            Image(
+                painterResource(R.drawable.about_logo),
+                contentDescription = "ProGallery logo",
+                modifier = Modifier.size(168.dp),
+            )
+            Spacer(Modifier.height(8.dp))
             Text(
                 "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

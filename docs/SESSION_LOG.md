@@ -20,8 +20,11 @@
 - Shane confirmed v0.1.0 works well on his phone; project stays personal-use only (no Play
   publishing, ads or billing).
 - Fixed the video editor compile error (Guava ImmutableList type for OverlayEffect).
-- Redesigned the adaptive icon (prototyped as SVG, previewed at 36–192 px with circle,
-  squircle and rounded masks plus themed mode, then converted to vector drawables).
+- Icon: first redesigned as a vector; Shane then supplied his own design, which replaced it.
+  The artwork was cut out of his image (flood-fill background removal), placed inside the
+  adaptive-icon safe zone on a matched navy background, with a generated monochrome layer;
+  the full design with wordmark is on the About screen. Previewed under circle/squircle/
+  rounded masks at 36–192 px and in themed mode before use.
 - Author credit set to exactly "Created by Shane BlackbuRn" via `AppInfo.AUTHOR_CREDIT`.
 - Added an emulator test job to CI (UI Automator + engine tests, screenshots).
 - Confirmed v0.1.0 was signed with a temporary per-run CI key (cert 7dad21ce…), so 0.2.0

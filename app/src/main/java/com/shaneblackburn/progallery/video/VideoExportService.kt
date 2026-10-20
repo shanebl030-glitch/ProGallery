@@ -58,7 +58,7 @@ class VideoExportService : Service() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         if (title != null && NotificationManagerCompat.from(this).areNotificationsEnabled()) {
             val n = NotificationCompat.Builder(this, CHANNEL)
-                .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                .setSmallIcon(R.mipmap.ic_launcher_monochrome)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setContentIntent(openApp())
@@ -77,7 +77,7 @@ class VideoExportService : Service() {
 
     private fun notification(progress: Float, title: String, ongoing: Boolean) =
         NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
             .setContentTitle("Exporting video")
             .setContentText(title)
             .setProgress(100, (progress * 100).toInt(), progress <= 0f)

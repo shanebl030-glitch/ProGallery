@@ -19,8 +19,10 @@ Personal-use build. Everything from 0.1.0 is unchanged.
   music with loop and fades, fade in/out, aspect frames; live preview using the same
   pipeline as export; export with resolution/frame rate/quality/H.264 or HEVC, running
   in a foreground service with progress notification and cancel.
-- **New app icon:** adaptive icon with gradient background, photo-card foreground with a
-  play badge, and a monochrome layer for Android 13+ themed icons. Shown on the About screen.
+- **New app icon (Shane's design):** adaptive icon built from the supplied artwork —
+  photo cards with a colour aperture on a matched navy background, sized for every
+  launcher mask, plus a monochrome layer for Android 13+ themed icons. The full design
+  with the "ProGallery" wordmark is shown on the About screen.
 - **Author credit** "Created by Shane BlackbuRn" on the About screen and Settings footer
   (single constant `AppInfo.AUTHOR_CREDIT`, covered by a unit test and a device test).
 - **Device test suite** (runs on an Android 14 emulator in CI): gallery, albums, library,
