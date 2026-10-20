@@ -138,18 +138,8 @@ jobs:
         run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
 
       - name: Run instrumented tests on emulator (Android 14)
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          ram-size: 4096M
-          disk-size: 6000M
-          emulator-boot-timeout: 1200
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          script: bash .github/scripts/device-tests.sh
+        timeout-minutes: 50
+        run: bash .github/scripts/run-emulator.sh
 
       - uses: actions/upload-artifact@v4
         if: always()
