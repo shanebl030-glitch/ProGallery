@@ -64,12 +64,14 @@ class ProjectsUiTest {
         Shots.take("72_after_reorder")
         assertTrue(clipLeft(video) < clipLeft(photo), "video moved before the photo")
 
-        // The colour grade panel offers the new controls.
+        // The colour grade panel offers the new controls (one per group confirms it; the
+        // deeper Light/Colour sliders scroll off a small panel, and "Colour" as a group
+        // chip would collide with the Colour tab, so check the unambiguous Light + Detail).
         ui.tapDesc("Clip $video")
         ui.tapText("Colour")
-        for (label in listOf("Exposure", "Highlights", "Shadows")) assertTrue(ui.has(By.text(label)), "$label slider")
+        assertTrue(ui.has(By.text("Exposure"), 8_000), "Light group: Exposure slider")
         ui.tapText("Detail")
-        assertTrue(ui.has(By.text("Sharpness")))
+        assertTrue(ui.has(By.text("Sharpness"), 8_000), "Detail group: Sharpness slider")
         Shots.take("73_grade_panel")
         ui.back() // deselect
 
