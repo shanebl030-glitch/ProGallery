@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
