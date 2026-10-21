@@ -11,14 +11,15 @@ The development workspace cannot reach Google's Android repositories, so:
   logcat and test reports are published to the `ci-results` branch for review.
 - The emulator is not a phone: real hardware still needs checking (see the list below).
 
-## v0.2.0 results (CI run __RUN__, commit __COMMIT__)
+## v0.2.0 results (CI run 39547218141, commit 8b6e47b)
 
 | Check | Result |
 |---|---|
 | Core unit tests | ✅ 51 pass |
 | App unit tests (incl. exact credit string) | ✅ pass |
 | Debug + release APK build, lint | ✅ |
-| Device tests on the emulator | __DEVICE__ |
+| Device tests on the emulator (debug build) | ✅ 18 / 18 pass |
+| Release (minified) APK smoke test on the emulator | ✅ pass: gallery, photo edit + save, video export, no crash |
 
 ### Verified on the emulator (with screenshots reviewed)
 - **Gallery:** timeline, albums list, opening an album, library, search ("4 results"),
