@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 
 /** Undo/redo for video projects (same rules as the photo editor's history). */
 data class ProjectHistory(
@@ -291,6 +292,8 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
                 height = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 1080,
                 sourceRotation = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0,
                 hasAudio = meta(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes",
+                frameRate = meta(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toFloatOrNull()?.roundToInt()
+                    ?.takeIf { it in 1..480 } ?: 30,
             )
         } catch (e: Exception) {
             Log.w(TAG, "probe failed for $uri", e)

@@ -79,7 +79,7 @@ object ProjectCodec {
         "trimStart" to c.trimStartMs, "trimEnd" to c.trimEndMs, "speed" to c.speed, "volume" to c.volume,
         "muted" to c.muted, "quarterTurns" to c.quarterTurns, "flipH" to c.flipH, "flipV" to c.flipV,
         "color" to color(c.color), "filter" to c.filter.name, "filterIntensity" to c.filterIntensity,
-        "image" to c.isImage, "mime" to c.mimeType,
+        "fps" to c.frameRate, "image" to c.isImage, "mime" to c.mimeType,
     )
 
     private fun color(c: VideoColor): Map<String, Any?> = linkedMapOf(
@@ -141,6 +141,7 @@ object ProjectCodec {
             color = o.obj("color")?.let(::color) ?: VideoColor(),
             filter = enumOr(o.strOrNull("filter"), VideoFilter.NONE),
             filterIntensity = o.float("filterIntensity", 1f).coerceIn(0f, 1f),
+            frameRate = o.int("fps", 30).coerceIn(1, 480),
             isImage = o.bool("image"),
             mimeType = o.strOrNull("mime"),
         )

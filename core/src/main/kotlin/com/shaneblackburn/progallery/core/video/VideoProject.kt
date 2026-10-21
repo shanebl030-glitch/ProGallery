@@ -117,6 +117,21 @@ data class VideoProject(
 
     data class Location(val clipIndex: Int, val sourceMs: Long, val offsetInClipMs: Long)
 
+    /** Timeline milliseconds for one displayed frame at [timelineMs] (for frame-stepping). */
+    fun frameDurationMsAt(timelineMs: Long): Long {
+        val clip = locate(timelineMs)?.let { clips[it.clipIndex] } ?: clips.firstOrNull() ?: return 33L
+        val fps = clip.frameRate.coerceIn(1, 480)
+        // A clip sped up by N plays N source frames per timeline frame slot; dividing keeps
+        // the step on the timeline's output cadence.
+        return max(1L, (1000.0 / fps / clip.speed).roundToLong())
+    }
+
+    /** Nudges [timelineMs] by [frames] displayed frames, clamped to the project. */
+    fun stepFrames(timelineMs: Long, frames: Int): Long {
+        val step = frameDurationMsAt(timelineMs) * frames
+        return (timelineMs + step).coerceIn(0L, max(0L, durationMs - 1))
+    }
+
     companion object {
         const val MIN_CLIP_MS = 100L
     }
@@ -146,6 +161,8 @@ data class Clip(
     val filter: VideoFilter = VideoFilter.NONE,
     /** 0..1 strength of [filter]. */
     val filterIntensity: Float = 1f,
+    /** Source frames per second (for frame-step); defaults to 30 when unknown. */
+    val frameRate: Int = 30,
     /**
      * A still photo shown for [trimmedSourceMs] (its "duration"). Photos have no audio,
      * no speed change and no trimming; [sourceDurationMs] is simply the display time.
@@ -212,7 +229,17 @@ enum class VideoFilter(val label: String) {
     VIVID("Vivid"), FADED("Faded"), CINEMATIC("Cinematic"), NOIR("Noir"),
 }
 
-enum class TransitionType(val label: String) { NONE("Cut"), FADE_BLACK("Fade through black"), FADE_WHITE("Fade through white") }
+enum class TransitionType(val label: String) {
+    NONE("Cut"),
+    FADE_BLACK("Fade through black"),
+    FADE_WHITE("Fade through white"),
+    BLUR("Blur"),
+    ZOOM("Zoom"),
+    ;
+
+    /** A brightness dip (handled by the colour-matrix path), vs a GL effect (blur/zoom). */
+    val isFade: Boolean get() = this == FADE_BLACK || this == FADE_WHITE
+}
 
 data class Transition(val type: TransitionType, val durationMs: Long = 600L) {
     companion object { val NONE = Transition(TransitionType.NONE, 0L) }
@@ -299,7 +326,7 @@ object FadeCurve {
         val starts = project.clipStarts()
         for (i in 0 until project.clips.size - 1) {
             val tr = project.transitionAfter(i)
-            if (tr.type == TransitionType.NONE || tr.durationMs <= 0) continue
+            if (!tr.type.isFade || tr.durationMs <= 0) continue // blur/zoom are handled elsewhere
             val boundary = starts[i + 1]
             val half = tr.durationMs / 2
             val d = kotlin.math.abs(t - boundary)
@@ -309,5 +336,42 @@ object FadeCurve {
             }
         }
         return amount.coerceIn(0f, 1f) to white
+    }
+}
+
+/**
+ * Non-colour transitions (blur, zoom) at timeline time [t], as effect strengths 0..1 that
+ * peak at the clip boundary and taper to 0 over the transition's half-duration. The GL
+ * transition effect consumes these, so the live preview and export match.
+ */
+object TransitionCurve {
+    data class Effects(val blur: Float, val zoom: Float) {
+        val isActive: Boolean get() = blur > 0f || zoom > 0f
+    }
+
+    /** True if the project uses any blur/zoom transition (so the GL effect is worth adding). */
+    fun needed(project: VideoProject): Boolean =
+        project.transitions.any { (it.type == TransitionType.BLUR || it.type == TransitionType.ZOOM) && it.durationMs > 0 }
+
+    fun at(project: VideoProject, t: Long): Effects {
+        var blur = 0f
+        var zoom = 0f
+        val starts = project.clipStarts()
+        for (i in 0 until project.clips.size - 1) {
+            val tr = project.transitionAfter(i)
+            if (tr.durationMs <= 0 || (tr.type != TransitionType.BLUR && tr.type != TransitionType.ZOOM)) continue
+            val half = tr.durationMs / 2
+            if (half <= 0) continue
+            val d = kotlin.math.abs(t - starts[i + 1])
+            if (d < half) {
+                val a = 1f - d.toFloat() / half
+                when (tr.type) {
+                    TransitionType.BLUR -> blur = max(blur, a)
+                    TransitionType.ZOOM -> zoom = max(zoom, a)
+                    else -> {}
+                }
+            }
+        }
+        return Effects(blur.coerceIn(0f, 1f), zoom.coerceIn(0f, 1f))
     }
 }

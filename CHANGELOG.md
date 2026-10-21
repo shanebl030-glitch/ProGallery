@@ -2,6 +2,31 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.3.2] — 2026-10-22 — frame-step + more transitions
+
+### Added
+- **Frame-step** buttons (‹ ›) in the transport bar: nudge the playhead by exactly one
+  frame to land a cut precisely. Uses the clip's real frame rate (probed; 30 fps default)
+  and accounts for speed changes. Disabled during playback.
+- **Two more transitions — Blur and Zoom** — alongside Fade through black / white. Both
+  are single-stream GL effects applied at the clip boundary, so they look the same in the
+  live preview and the export. (Classic cross-dissolve/wipe/slide, which show both clips at
+  once, need two-stream compositing and are planned for the transitions milestone.)
+- **Preview diagnostics:** when the full-effects preview falls back to simplified playback,
+  the banner is now tappable and shows exactly why (the decoder error code, message and the
+  clip's format). This is to track down why the effects preview falls back on some phones
+  even for ordinary SDR video — collect that text if it happens to you.
+
+### Testing
+- 66 core tests (added frame-step math and the blur/zoom transition curve).
+- Device tests: blur softens and zoom shifts the boundary frame on export, with unchanged
+  duration; saved project round-trips the new frame-rate and transition types.
+
+### Known
+- On some devices the live preview still falls back to simplified (raw) playback even for
+  SDR video, so colour grading and the new transitions are seen on export rather than live.
+  The new tappable details are there to diagnose and fix this.
+
 ## [0.3.1] — 2026-10-22 — preview decoding fix + split/cut tools
 
 Focused fix release before milestone 2. Everything from 0.3.0 is kept.

@@ -40,6 +40,8 @@ class PreviewController(
     private val onError: (String?) -> Unit = {},
     private val onReady: () -> Unit = {},
     private val onMode: (PreviewMode) -> Unit = {},
+    /** Full technical reason the full-effects preview fell back (for diagnostics), or null. */
+    private val onFallbackReason: (String?) -> Unit = {},
 ) {
     private var player: Player? = null
     private var view: PlayerView? = null
@@ -89,6 +91,7 @@ class PreviewController(
             p.seekTo(target)
             if (wasPlaying) p.play()
             onError(null)
+            onFallbackReason(null)
             true
         } catch (e: Exception) {
             // Building the composition itself failed; try raw playback.
@@ -103,6 +106,11 @@ class PreviewController(
     @MainThread
     private fun fallbackToSimplePlayer(project: VideoProject, target: Long, wasPlaying: Boolean, cause: Throwable): Boolean {
         releasePlayer()
+        // Record exactly why the effects pipeline failed, so a device-specific issue can be
+        // diagnosed from the app (and logcat) without needing the source video.
+        val reason = buildReason(project, cause)
+        android.util.Log.e("PreviewController", "effects preview failed; using simplified playback. $reason", cause)
+        onFallbackReason(reason)
         if (project.clips.isEmpty()) { onError(diagnose(project, cause)); return false }
         return try {
             val exo = ExoPlayer.Builder(context).build()
@@ -162,6 +170,23 @@ class PreviewController(
         val info = firstVideoInfo(project)
         val fmt = info?.summary()?.let { " ($it)" } ?: ""
         return "Simplified preview$fmt — colour, speed and effects apply on export."
+    }
+
+    /** A detailed technical reason string: error code, message, cause chain and clip format. */
+    private fun buildReason(project: VideoProject, cause: Throwable): String {
+        val sb = StringBuilder()
+        val pe = cause as? PlaybackException
+        if (pe != null) sb.append(pe.errorCodeName)
+        val msg = cause.message
+        if (!msg.isNullOrBlank()) sb.append(if (sb.isEmpty()) "" else ": ").append(msg)
+        var c = cause.cause
+        var depth = 0
+        while (c != null && depth < 3) {
+            c.message?.takeIf { it.isNotBlank() }?.let { sb.append(" ← ").append(c!!.javaClass.simpleName).append(": ").append(it) }
+            c = c.cause; depth++
+        }
+        firstVideoInfo(project)?.let { sb.append(" [").append(it.summary()).append("]") }
+        return sb.toString().ifBlank { cause.javaClass.simpleName }
     }
 
     private fun diagnose(project: VideoProject, cause: Throwable): String {

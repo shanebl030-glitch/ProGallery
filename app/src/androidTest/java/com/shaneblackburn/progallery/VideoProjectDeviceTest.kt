@@ -119,6 +119,62 @@ class VideoProjectDeviceTest {
 
     private fun solid(w: Int, h: Int, color: Int) = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
 
+    // ------------------------------------------------------------ transitions
+
+    /** Mean per-channel difference between two frames over a vertical band [y0,y1] (fractions). */
+    private fun meanDiff(a: Bitmap, b: Bitmap, y0: Float, y1: Float): Double {
+        var sum = 0L; var n = 0
+        val w = minOf(a.width, b.width)
+        for (y in (a.height * y0).toInt() until (a.height * y1).toInt() step 3) for (x in 0 until w step 3) {
+            val p = a.getPixel(x, y); val q = b.getPixel(x, y)
+            sum += abs(Color.red(p) - Color.red(q)) + abs(Color.green(p) - Color.green(q)) + abs(Color.blue(p) - Color.blue(q))
+            n++
+        }
+        return sum.toDouble() / n / 3
+    }
+
+    /** Mean absolute difference between horizontally adjacent pixels (high-frequency energy). */
+    private fun highFrequency(b: Bitmap): Double {
+        var sum = 0L; var n = 0
+        for (y in 0 until b.height step 3) for (x in 1 until b.width step 3) {
+            val p = b.getPixel(x, y); val q = b.getPixel(x - 1, y)
+            sum += abs(Color.red(p) - Color.red(q)) + abs(Color.green(p) - Color.green(q)) + abs(Color.blue(p) - Color.blue(q))
+            n++
+        }
+        return sum.toDouble() / n
+    }
+
+    @Test fun blurAndZoomTransitionsAffectBoundaryFrame() {
+        val a = videoClip()
+        val b = videoClip().copy(id = 2)
+        val boundary = a.timelineDurationMs
+        fun twoClips(t: com.shaneblackburn.progallery.core.video.TransitionType) =
+            VideoProject(listOf(a, b), transitions = listOf(
+                com.shaneblackburn.progallery.core.video.Transition(t, 1_000)))
+
+        val plain = export(twoClips(com.shaneblackburn.progallery.core.video.TransitionType.NONE), "tr_plain")
+        val blur = export(twoClips(com.shaneblackburn.progallery.core.video.TransitionType.BLUR), "tr_blur")
+        val zoom = export(twoClips(com.shaneblackburn.progallery.core.video.TransitionType.ZOOM), "tr_zoom")
+        try {
+            // Duration is unchanged by these single-stream transitions.
+            assertTrue(abs(plain.durationMs - 2 * boundary) <= 500, "plain ${plain.durationMs}")
+            assertTrue(abs(blur.durationMs - 2 * boundary) <= 500, "blur ${blur.durationMs}")
+
+            val plainF = frame(plain, boundary); Shots.save("54_tr_plain", plainF)
+            val blurF = frame(blur, boundary); Shots.save("55_tr_blur", blurF)
+            val zoomF = frame(zoom, boundary); Shots.save("56_tr_zoom", zoomF)
+
+            // At the exact boundary the blur is at full strength → fewer sharp edges.
+            val hfPlain = highFrequency(plainF); val hfBlur = highFrequency(blurF)
+            android.util.Log.i("VideoProjectDeviceTest", "transition hf plain=$hfPlain blur=$hfBlur")
+            assertTrue(hfBlur < hfPlain * 0.8, "blur softens the boundary frame (plain $hfPlain -> blur $hfBlur)")
+            // Zoom scales the frame at the boundary → content visibly shifts vs a plain cut.
+            val zoomDiff = meanDiff(plainF, zoomF, 0f, 1f)
+            android.util.Log.i("VideoProjectDeviceTest", "transition zoom diff=$zoomDiff")
+            assertTrue(zoomDiff > 3.0, "zoom changes the boundary frame (diff $zoomDiff)")
+        } finally { plain.file.delete(); blur.file.delete(); zoom.file.delete() }
+    }
+
     // ------------------------------------------------------------ diagnostics
 
     @Test fun videoDiagnosticsReadsFormat() {

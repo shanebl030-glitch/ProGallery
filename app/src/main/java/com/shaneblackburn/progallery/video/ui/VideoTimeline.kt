@@ -284,7 +284,13 @@ private fun TransitionButton(type: TransitionType, selected: Boolean, onClick: (
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                when (type) { TransitionType.NONE -> "|"; TransitionType.FADE_BLACK -> "◐"; TransitionType.FADE_WHITE -> "○" },
+                when (type) {
+                    TransitionType.NONE -> "|"
+                    TransitionType.FADE_BLACK -> "◐"
+                    TransitionType.FADE_WHITE -> "○"
+                    TransitionType.BLUR -> "❋"
+                    TransitionType.ZOOM -> "⤢"
+                },
                 fontSize = 11.sp,
                 color = if (selected || type != TransitionType.NONE) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             )

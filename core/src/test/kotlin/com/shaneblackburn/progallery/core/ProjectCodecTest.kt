@@ -54,13 +54,13 @@ class ProjectCodecTest {
         val video = Clip(11, "content://media/external/video/media/5", "beach.mp4", 12_000, 1920, 1080,
             sourceRotation = 90, hasAudio = true, speed = 1.5f, volume = 0.4f, muted = false, quarterTurns = 1,
             flipH = true, color = VideoColor(brightness = 0.1f, exposure = -0.3f, highlights = -0.5f, shadows = 0.6f,
-                vibrance = 0.2f, tint = -0.1f, sharpness = 0.5f), filter = VideoFilter.CINEMATIC, filterIntensity = 0.7f,
+                vibrance = 0.2f, tint = -0.1f, sharpness = 0.5f), filter = VideoFilter.CINEMATIC, filterIntensity = 0.7f, frameRate = 60,
         ).withTrim(1_000, 9_000)
         val photo = Clip(22, "content://media/external/images/media/9", "sunset.jpg", 0, 4000, 3000,
             hasAudio = false, isImage = true, mimeType = "image/jpeg").withImageDuration(4_500)
         return VideoProject(
             clips = listOf(video, photo),
-            transitions = listOf(Transition(TransitionType.FADE_WHITE, 800)),
+            transitions = listOf(Transition(TransitionType.BLUR, 800)),
             texts = listOf(TimedText(5, "Day \"one\"\nat the beach", 200, 3_000, x = 0.3f, y = 0.2f, size = 0.08f,
                 color = 0xFFFF8800.toInt(), background = false, animation = TextAnimation.POP)),
             music = MusicTrack("content://audio/1", "song.mp3", 180_000, startOffsetMs = 15_000, volume = 0.5f,

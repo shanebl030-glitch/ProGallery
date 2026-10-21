@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material.icons.outlined.ZoomOut
@@ -52,6 +55,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -78,6 +82,7 @@ import com.shaneblackburn.progallery.video.PreviewController
 import com.shaneblackburn.progallery.video.VideoEditorViewModel
 import com.shaneblackburn.progallery.video.VideoExportSettings
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -133,11 +138,14 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     var playing by remember { mutableStateOf(false) }
     var previewError by remember { mutableStateOf<String?>(null) }
     var simplifiedPreview by remember { mutableStateOf(false) }
+    var fallbackReason by remember { mutableStateOf<String?>(null) }
+    var showFallbackDetails by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var textEdit by remember { mutableStateOf<TimedText?>(null) }
     var settings by remember { mutableStateOf(VideoExportSettings()) }
     val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     // A brand-new project has been written to storage: let the caller switch to its saved route.
     LaunchedEffect(persisted, doc?.id, loading) {
@@ -160,6 +168,7 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             onPlayingChanged = { playing = it },
             onError = { previewError = it },
             onMode = { simplifiedPreview = it == com.shaneblackburn.progallery.video.PreviewMode.SIMPLIFIED },
+            onFallbackReason = { fallbackReason = it },
         )
     }
     DisposableEffect(Unit) { onDispose { preview.release() } }
@@ -249,12 +258,16 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                 )
                 previewError?.let {
                     if (simplifiedPreview) {
-                        // Working raw preview: a slim, non-blocking banner at the top.
+                        // Working raw preview: a slim, non-blocking banner at the top. Tapping it
+                        // shows why the full-effects preview couldn't run (for diagnostics).
                         Text(
-                            it, color = Color.White, textAlign = TextAlign.Center,
+                            it + (if (fallbackReason != null) "  ⓘ Details" else ""),
+                            color = Color.White, textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                                .background(Color(0xCC5B4300)).padding(horizontal = 12.dp, vertical = 6.dp),
+                                .background(Color(0xCC5B4300))
+                                .clickable(enabled = fallbackReason != null) { showFallbackDetails = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
                         )
                     } else {
                         // Hard failure: centred message over black.
@@ -267,16 +280,27 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             }
         }
 
-        // Transport row
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Transport row.  Frame-step nudges the playhead by exactly one frame for precise cuts.
+        val seekTo: (Long) -> Unit = { ms ->
+            positionMs = ms.coerceIn(0, maxOf(0, project.durationMs))
+            preview.seekTo(positionMs)
+            scope.launch { scroll.scrollTo((positionMs * pxPerMs).roundToInt()) }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 if (preview.isPlaying) preview.pause() else {
                     if (positionMs >= project.durationMs - 50) preview.seekTo(0)
                     preview.play()
                 }
-            }) { Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pause" else "Play") }
+            }, modifier = Modifier.size(44.dp)) { Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pause" else "Play") }
+            IconButton(onClick = { if (!playing) seekTo(project.stepFrames(positionMs, -1)) }, enabled = !playing, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Outlined.ChevronLeft, "Previous frame")
+            }
+            IconButton(onClick = { if (!playing) seekTo(project.stepFrames(positionMs, 1)) }, enabled = !playing, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Outlined.ChevronRight, "Next frame")
+            }
             Text("${Formatters.timecode(positionMs)} / ${Formatters.timecode(project.durationMs)}",
-                style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.weight(1f).padding(horizontal = 2.dp))
             // Split at the playhead — always available, whatever is selected.
             IconButton(onClick = {
                 val before = project
@@ -285,12 +309,11 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                 if (after == before) {
                     Toast.makeText(context, "Move the playhead inside a clip to split", Toast.LENGTH_SHORT).show()
                 } else {
-                    // Select the piece that now starts at the playhead (the right-hand half).
                     after.locate(positionMs)?.let { selection = TimelineSelection.ClipSel(it.clipIndex) }
                 }
-            }) { Icon(Icons.Outlined.ContentCut, "Split at playhead") }
-            IconButton(onClick = { pxPerMs = (pxPerMs / 1.5f).coerceAtLeast(0.005f) }) { Icon(Icons.Outlined.ZoomOut, "Zoom timeline out") }
-            IconButton(onClick = { pxPerMs = (pxPerMs * 1.5f).coerceAtMost(0.6f) }) { Icon(Icons.Outlined.ZoomIn, "Zoom timeline in") }
+            }, modifier = Modifier.size(44.dp)) { Icon(Icons.Outlined.ContentCut, "Split at playhead") }
+            IconButton(onClick = { pxPerMs = (pxPerMs / 1.5f).coerceAtLeast(0.005f) }, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.ZoomOut, "Zoom timeline out") }
+            IconButton(onClick = { pxPerMs = (pxPerMs * 1.5f).coerceAtMost(0.6f) }, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.ZoomIn, "Zoom timeline in") }
         }
 
         // Timeline
@@ -427,6 +450,23 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             text = { androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
             confirmButton = { TextButton(onClick = { vm.rename(name); renaming = false }, enabled = name.isNotBlank()) { Text("Rename") } },
             dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
+        )
+    }
+    if (showFallbackDetails) {
+        AlertDialog(
+            onDismissRequest = { showFallbackDetails = false },
+            title = { Text("About the preview") },
+            text = {
+                Column {
+                    Text("Your edits (colour, speed, transitions and effects) will still be applied when you export. The live preview is showing the raw footage because the effects preview couldn't run on this device for this video.",
+                        style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Text("Technical reason (for the developer):", style = MaterialTheme.typography.labelMedium)
+                    Text(fallbackReason ?: "unknown", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showFallbackDetails = false }) { Text("OK") } },
         )
     }
     if (showExport) {

@@ -97,6 +97,7 @@ object ProjectComposer {
         }
 
         val compositionVideoEffects = buildList<Effect> {
+            if (TransitionGlEffect.needed(project)) add(TransitionGlEffect(project))
             if (TimelineFadeMatrix.needed(project)) add(TimelineFadeMatrix(project))
             if (project.texts.isNotEmpty()) add(OverlayEffect(ImmutableList.of<TextureOverlay>(TimedTextOverlay(project, outW, outH))))
             if (settings.frameRate > 0) add(FrameDropEffect.createDefaultFrameDropEffect(settings.frameRate.toFloat()))

@@ -58,6 +58,8 @@ private val GUIDE: List<Pair<String, List<String>>> = listOf(
         "Scroll the timeline to move the playhead. Tap a clip to select it, then drag its edges to trim. Long-press a clip and drag it to reorder. Back deselects.",
         "Clip tools: split at the playhead, speed (0.25× to 4×, voice pitch kept), volume or mute, rotate, flip, colour, filters with strength, and move earlier or later. Photos have a duration slider instead of trimming and speed.",
         "Split and cut: scrub the playhead and tap the scissors in the transport bar to split the clip there. To remove a section, split at its start and end, tap the middle piece and delete it — the gap closes automatically. Audio and video stay in sync.",
+        "Use the ‹ and › frame-step buttons to nudge the playhead one frame at a time so you can cut at the exact spot.",
+        "Transitions (tap the dot between two clips): Fade through black or white, Blur, or Zoom. Blur and Zoom show in the preview and the export.",
         "If your phone can't show a video through the effects preview, ProGallery falls back to a simple preview of the footage (a banner says so); colour, speed and effects still apply when you export.",
         "Colour grading: Light (exposure, brightness, contrast, highlights, shadows), Colour (saturation, vibrance, warmth, tint) and Detail (sharpness). The preview shows exactly what the export will look like.",
         "Add media adds more photos and videos. Tap the dot between two clips for a fade-through-black or white transition.",

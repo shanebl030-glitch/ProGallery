@@ -67,7 +67,8 @@ The same content is available inside the app under **Library → Settings → Us
 - **Split / cut:** scrub the playhead and tap the **scissors** in the transport bar to
   split the clip there. To remove a section, split at its start and end, tap the middle
   piece and delete it — the remaining footage joins up automatically, and audio stays in
-  sync.
+  sync. Use the **‹ › frame-step** buttons to nudge the playhead one frame at a time and
+  cut at the exact spot.
 - If a video can’t be decoded through the effects preview on your phone, ProGallery shows
   a **simplified preview** of the footage (with a banner); colour, speed and effects still
   apply on export.
@@ -75,7 +76,8 @@ The same content is available inside the app under **Library → Settings → Us
   shadows; *Colour* — saturation, vibrance, warmth, tint; *Detail* — sharpness. The live
   preview and the export use the same GPU grade.
 - **Add media** adds more photos and videos. Tap the **dot between clips** for a
-  transition (fade through black or white, 0.3–1.5 s).
+  transition: **Fade through black / white**, **Blur** or **Zoom** (0.3–1.5 s). Blur and
+  Zoom apply at the cut and appear in both the preview and the export.
 - **Text** adds a timed title (fade, slide-up or pop animation). **Music** adds a
   background track (volume, start point, loop, fade in/out). **Frame** sets 1:1, 9:16,
   16:9 or 4:5. **Fade in/out** from or to black or white.
