@@ -366,7 +366,11 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                         onCommit = { change -> vm.commit { p -> p.updateClip(sel.index, change) } },
                     )
                 }
-                is TimelineSelection.TransitionSel -> TransitionTools(project.transitionAfter(sel.afterIndex)) { t ->
+                is TimelineSelection.TransitionSel -> TransitionTools(
+                    current = project.transitionAfter(sel.afterIndex),
+                    aName = project.clips.getOrNull(sel.afterIndex)?.name ?: "Clip ${sel.afterIndex + 1}",
+                    bName = project.clips.getOrNull(sel.afterIndex + 1)?.name ?: "Clip ${sel.afterIndex + 2}",
+                ) { t ->
                     vm.commit { it.setTransition(sel.afterIndex, t) }
                 }
                 is TimelineSelection.TextSel -> project.texts.firstOrNull { it.id == sel.id }?.let { t ->

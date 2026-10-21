@@ -65,7 +65,9 @@ object ProjectCodec {
 
     private fun project(p: VideoProject): Map<String, Any?> = linkedMapOf(
         "clips" to p.clips.map(::clip),
-        "transitions" to p.transitions.map { mapOf("type" to it.type.name, "ms" to it.durationMs) },
+        "transitions" to p.transitions.map {
+            mapOf("type" to it.type.name, "ms" to it.durationMs, "dir" to it.direction.name, "intensity" to it.intensity)
+        },
         "texts" to p.texts.map(::text),
         "music" to p.music?.let(::music),
         "fadeIn" to p.fadeIn?.let { mapOf("ms" to it.durationMs, "white" to it.toWhite) },
@@ -108,7 +110,12 @@ object ProjectCodec {
         return VideoProject(
             clips = clips,
             transitions = o.objs("transitions").map {
-                Transition(enumOr(it.strOrNull("type"), TransitionType.NONE), it.long("ms", 0L).coerceAtLeast(0L))
+                Transition(
+                    type = enumOr(it.strOrNull("type"), TransitionType.NONE),
+                    durationMs = it.long("ms", 0L).coerceAtLeast(0L),
+                    direction = enumOr(it.strOrNull("dir"), TransitionDirection.AUTO),
+                    intensity = it.float("intensity", 0.6f).coerceIn(0f, 1f),
+                )
             },
             texts = o.objs("texts").map(::text),
             music = o.obj("music")?.let(::music)?.takeIf { it.uri.isNotEmpty() && it.durationMs > 0 },

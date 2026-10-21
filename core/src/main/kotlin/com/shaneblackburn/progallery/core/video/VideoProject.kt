@@ -120,28 +120,34 @@ data class VideoProject(
     /** The fade/transition windows that touch clip [index], evaluated per-clip. */
     fun clipEdge(index: Int): ClipEdge {
         val clip = clips.getOrNull(index) ?: return ClipEdge(0)
-        // Incoming edge: the project fade-in on the first clip, else the transition before it.
         var inType = TransitionType.NONE; var inMs = 0L
+        var inDir = TransitionDirection.AUTO; var inIntensity = 0.6f
+        var outType = TransitionType.NONE; var outMs = 0L
+        var outDir = TransitionDirection.AUTO; var outIntensity = 0.6f
+        // Incoming edge: the project fade-in on the first clip, else the transition before it.
         if (index == 0) {
-            fadeIn?.let { if (it.durationMs > 0) { inType = if (it.toWhite) TransitionType.FADE_WHITE else TransitionType.FADE_BLACK; inMs = it.durationMs } }
+            fadeIn?.let {
+                if (it.durationMs > 0) { inType = if (it.toWhite) TransitionType.FADE_WHITE else TransitionType.FADE_BLACK; inMs = it.durationMs }
+            }
         } else {
             val tr = transitionAfter(index - 1)
-            if (tr.type != TransitionType.NONE && tr.durationMs > 0) { inType = tr.type; inMs = tr.durationMs / 2 }
+            if (tr.isActive && !tr.type.crossClip) { inType = tr.type; inMs = tr.durationMs / 2; inDir = tr.direction; inIntensity = tr.intensity }
         }
         // Outgoing edge: the project fade-out on the last clip, else the transition after it.
-        var outType = TransitionType.NONE; var outMs = 0L
         if (index == clips.lastIndex) {
-            fadeOut?.let { if (it.durationMs > 0) { outType = if (it.toWhite) TransitionType.FADE_WHITE else TransitionType.FADE_BLACK; outMs = it.durationMs } }
+            fadeOut?.let {
+                if (it.durationMs > 0) { outType = if (it.toWhite) TransitionType.FADE_WHITE else TransitionType.FADE_BLACK; outMs = it.durationMs }
+            }
         } else {
             val tr = transitionAfter(index)
-            if (tr.type != TransitionType.NONE && tr.durationMs > 0) { outType = tr.type; outMs = tr.durationMs / 2 }
+            if (tr.isActive && !tr.type.crossClip) { outType = tr.type; outMs = tr.durationMs / 2; outDir = tr.direction; outIntensity = tr.intensity }
         }
-        return ClipEdge(clip.timelineDurationMs, inType, inMs, outType, outMs)
+        return ClipEdge(clip.timelineDurationMs, inType, inMs, inDir, inIntensity, outType, outMs, outDir, outIntensity)
     }
 
-    /** True if any clip has a fade or transition (so the per-clip transition effect is needed). */
+    /** True if any clip has a fade or renderable transition (so the per-clip transition effect is needed). */
     fun hasAnyTransition(): Boolean = fadeIn != null || fadeOut != null ||
-        transitions.any { it.type != TransitionType.NONE && it.durationMs > 0 }
+        transitions.any { it.isActive && !it.type.crossClip }
 
     /** Timeline milliseconds for one displayed frame at [timelineMs] (for frame-stepping). */
     fun frameDurationMsAt(timelineMs: Long): Long {
@@ -255,23 +261,8 @@ enum class VideoFilter(val label: String) {
     VIVID("Vivid"), FADED("Faded"), CINEMATIC("Cinematic"), NOIR("Noir"),
 }
 
-enum class TransitionType(val label: String) {
-    NONE("Cut"),
-    FADE_BLACK("Fade through black"),
-    FADE_WHITE("Fade through white"),
-    BLUR("Blur"),
-    ZOOM("Zoom"),
-    ;
-
-    /** A brightness dip (handled by the colour-matrix path), vs a GL effect (blur/zoom). */
-    val isFade: Boolean get() = this == FADE_BLACK || this == FADE_WHITE
-}
-
-data class Transition(val type: TransitionType, val durationMs: Long = 600L) {
-    companion object { val NONE = Transition(TransitionType.NONE, 0L) }
-}
-
-data class Fade(val durationMs: Long, val toWhite: Boolean = false)
+// TransitionType, TransitionDirection, Transition, TransitionUniforms, TransitionSample and
+// the CPU reference renderer live in Transitions.kt. Fade lives there too.
 
 enum class AspectMode(val label: String, val ratio: Float?) {
     ORIGINAL("Original", null), SQUARE("1:1", 1f), PORTRAIT("9:16", 9f / 16f), LANDSCAPE("16:9", 16f / 9f), FOUR_FIVE("4:5", 4f / 5f),
@@ -379,33 +370,33 @@ data class ClipEdge(
     val durationMs: Long,
     val inType: TransitionType = TransitionType.NONE,
     val inMs: Long = 0,
+    val inDir: TransitionDirection = TransitionDirection.AUTO,
+    val inIntensity: Float = 0.6f,
     val outType: TransitionType = TransitionType.NONE,
     val outMs: Long = 0,
+    val outDir: TransitionDirection = TransitionDirection.AUTO,
+    val outIntensity: Float = 0.6f,
 ) {
-    data class Effects(val fade: Float, val white: Boolean, val blur: Float, val zoom: Float) {
-        val isActive: Boolean get() = fade > 0f || blur > 0f || zoom > 0f
+    private val inRenderable: Boolean get() = inType != TransitionType.NONE && !inType.crossClip && inMs > 0
+    private val outRenderable: Boolean get() = outType != TransitionType.NONE && !outType.crossClip && outMs > 0
+
+    val isActive: Boolean get() = inRenderable || outRenderable
+
+    /**
+     * The active transition at clip-local time [t] ms. The incoming window peaks at t=0 and
+     * tapers to 0 at [inMs]; the outgoing window peaks at t=[durationMs] and tapers over [outMs].
+     * If both overlap (a very short clip), the one nearer its boundary (larger edge) wins.
+     */
+    fun sampleAt(t: Long): TransitionSample {
+        val inEdge = if (inRenderable && t < inMs) (1f - t.toFloat() / inMs).coerceIn(0f, 1f) else 0f
+        val outEdge = if (outRenderable && t > durationMs - outMs) (1f - (durationMs - t).toFloat() / outMs).coerceIn(0f, 1f) else 0f
+        return when {
+            outEdge > 0f && outEdge >= inEdge -> TransitionSample(outType, outEdge, incoming = false, outDir, outIntensity)
+            inEdge > 0f -> TransitionSample(inType, inEdge, incoming = true, inDir, inIntensity)
+            else -> TransitionSample.NONE
+        }
     }
 
-    val isActive: Boolean get() = (inType != TransitionType.NONE && inMs > 0) || (outType != TransitionType.NONE && outMs > 0)
-
-    /** Effect strengths (0..1) at clip-local time [t] ms. */
-    fun at(t: Long): Effects {
-        var fade = 0f; var white = false; var blur = 0f; var zoom = 0f
-        fun apply(type: TransitionType, p: Float) {
-            when (type) {
-                TransitionType.FADE_BLACK -> if (p > fade) { fade = p }
-                TransitionType.FADE_WHITE -> if (p > fade) { fade = p; white = true }
-                TransitionType.BLUR -> blur = max(blur, p)
-                TransitionType.ZOOM -> zoom = max(zoom, p)
-                TransitionType.NONE -> {}
-            }
-        }
-        // Incoming window peaks at t=0 and tapers to 0 at inMs.
-        if (inType != TransitionType.NONE && inMs > 0 && t < inMs) apply(inType, 1f - t.toFloat() / inMs)
-        // Outgoing window peaks at t=durationMs and tapers to 0 at durationMs-outMs.
-        if (outType != TransitionType.NONE && outMs > 0 && t > durationMs - outMs) {
-            apply(outType, 1f - (durationMs - t).toFloat() / outMs)
-        }
-        return Effects(fade.coerceIn(0f, 1f), white, blur.coerceIn(0f, 1f), zoom.coerceIn(0f, 1f))
-    }
+    /** Concrete render uniforms at clip-local time [t] ms (identity when nothing is active). */
+    fun uniformsAt(t: Long): TransitionUniforms = sampleAt(t).uniforms()
 }

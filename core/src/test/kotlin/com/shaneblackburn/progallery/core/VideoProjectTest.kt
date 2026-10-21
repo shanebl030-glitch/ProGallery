@@ -141,24 +141,39 @@ class VideoProjectTest {
         val e0 = p.clipEdge(0)
         assertEquals(TransitionType.FADE_BLACK, e0.inType); assertEquals(600L, e0.inMs)
         assertEquals(TransitionType.BLUR, e0.outType); assertEquals(500L, e0.outMs) // half of 1000
-        assertEquals(1f, e0.at(0).fade, 1e-3f)              // full fade-in at the very start
-        assertEquals(0f, e0.at(600).fade, 1e-3f)            // fade-in done
-        assertEquals(1f, e0.at(4_000).blur, 1e-3f)          // full blur at the boundary (clip end)
-        assertEquals(0f, e0.at(3_500).blur, 1e-3f)          // blur window just begins
-        assertTrue(e0.at(3_750).blur in 0.4f..0.6f)         // mid-taper
+        // Full fade-in at the very start (incoming edge = 1 → fully black).
+        val s0 = e0.sampleAt(0)
+        assertEquals(TransitionType.FADE_BLACK, s0.type); assertTrue(s0.incoming); assertEquals(1f, s0.edge, 1e-3f)
+        assertEquals(1f, e0.uniformsAt(0).fade, 1e-3f)
+        assertTrue(!e0.sampleAt(600).isActive)              // fade-in done
+        // Full blur at the boundary (clip end); window just begins at t=3500; mid-taper at 3750.
+        val b0 = e0.sampleAt(4_000)
+        assertEquals(TransitionType.BLUR, b0.type); assertTrue(!b0.incoming); assertEquals(1f, b0.edge, 1e-3f)
+        assertTrue(e0.uniformsAt(4_000).blur > 0f)
+        assertEquals(0f, e0.sampleAt(3_500).edge, 1e-3f)
+        assertTrue(e0.sampleAt(3_750).edge in 0.4f..0.6f)
 
-        // Clip 1: blur-in at its start (the SAME boundary, peak at t=0), zoom-out at its end.
+        // Clip 1: blur-in at its start (SAME boundary, peak at t=0), zoom-out at its end.
         val e1 = p.clipEdge(1)
         assertEquals(TransitionType.BLUR, e1.inType)
-        assertEquals(1f, e1.at(0).blur, 1e-3f)              // boundary blur also peaks on clip 2's first frame
+        assertEquals(1f, e1.sampleAt(0).edge, 1e-3f)        // boundary blur also peaks on clip 2's first frame
+        assertTrue(e1.sampleAt(0).incoming)
         assertEquals(TransitionType.ZOOM, e1.outType)
-        assertEquals(1f, e1.at(4_000).zoom, 1e-3f)
+        val z1 = e1.sampleAt(4_000)
+        assertEquals(TransitionType.ZOOM, z1.type); assertEquals(1f, z1.edge, 1e-3f)
+        assertTrue(e1.uniformsAt(4_000).scale > 1f, "zoom punches in at the boundary")
 
         // Clip 2 (last): zoom-in at its start, nothing at its end (no fade-out set).
         val e2 = p.clipEdge(2)
-        assertEquals(1f, e2.at(0).zoom, 1e-3f)
+        assertEquals(1f, e2.sampleAt(0).edge, 1e-3f)
         assertEquals(TransitionType.NONE, e2.outType)
-        assertTrue(!e2.at(4_000).isActive)
+        assertTrue(!e2.sampleAt(4_000).isActive)
+
+        // A cross-clip transition (not renderable per-clip) contributes no edge effect.
+        val cd = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000)))
+            .setTransition(0, Transition(TransitionType.CROSS_DISSOLVE, 1_000))
+        assertTrue(!cd.hasAnyTransition())
+        assertTrue(!cd.clipEdge(0).sampleAt(4_000).isActive)
 
         assertTrue(!VideoProject(listOf(clip(1, 4_000))).hasAnyTransition())
     }

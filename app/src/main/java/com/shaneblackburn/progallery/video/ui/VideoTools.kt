@@ -1,13 +1,19 @@
 package com.shaneblackburn.progallery.video.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -32,6 +38,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +46,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.shaneblackburn.progallery.core.format.Formatters
 import com.shaneblackburn.progallery.core.video.AspectMode
@@ -49,6 +58,8 @@ import com.shaneblackburn.progallery.core.video.MusicTrack
 import com.shaneblackburn.progallery.core.video.TextAnimation
 import com.shaneblackburn.progallery.core.video.TimedText
 import com.shaneblackburn.progallery.core.video.Transition
+import com.shaneblackburn.progallery.core.video.TransitionDirection
+import com.shaneblackburn.progallery.core.video.TransitionFamily
 import com.shaneblackburn.progallery.core.video.TransitionType
 import com.shaneblackburn.progallery.core.video.VideoColor
 import com.shaneblackburn.progallery.core.video.VideoFilter
@@ -217,25 +228,122 @@ private fun ToolButton(
 }
 
 @Composable
-fun TransitionTools(current: Transition, onSet: (Transition) -> Unit) {
+fun TransitionTools(
+    current: Transition,
+    aName: String,
+    bName: String,
+    onSet: (Transition) -> Unit,
+) {
     Column {
-        Text("Transition between clips", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp, 8.dp))
-        ChipRow {
-            TransitionType.entries.forEach { t ->
-                FilterChip(selected = current.type == t,
-                    onClick = { onSet(if (t == TransitionType.NONE) Transition.NONE else Transition(t, current.durationMs.takeIf { it > 0 } ?: 600)) },
-                    label = { Text(t.label) })
+        Text("Transition  ·  $aName → $bName", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp, 8.dp, 16.dp, 0.dp))
+        Text(
+            "Plays at the cut BETWEEN these two clips. To style one whole clip, select it and use the Colour or Filter tab.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+        )
+        // Animated demo of the current choice (or the two clips cutting, for Standard cut).
+        TransitionDemo(current, Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+
+        TransitionFamily.entries.forEach { fam ->
+            val types = TransitionType.selectable.filter { it.family == fam }
+            if (types.isEmpty()) return@forEach
+            Text(fam.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 16.dp, top = 6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                types.forEach { t -> TransitionCard(t, selected = current.type == t, onPick = { onSet(pick(t, current)) }) }
             }
         }
+
         if (current.type != TransitionType.NONE) {
+            val dirs = current.type.directions()
+            if (dirs.isNotEmpty()) {
+                ChipRow {
+                    Text("Direction", style = MaterialTheme.typography.labelLarge)
+                    dirs.forEach { d ->
+                        val on = current.direction == d || (current.direction == TransitionDirection.AUTO && current.type.resolve(TransitionDirection.AUTO) == d)
+                        FilterChip(selected = on, onClick = { onSet(current.copy(direction = d)) }, label = { Text(d.label) })
+                    }
+                }
+            }
+            if (current.type.usesIntensity) {
+                ChipRow {
+                    Text("Strength", style = MaterialTheme.typography.labelLarge)
+                    listOf("Subtle" to 0.3f, "Medium" to 0.6f, "Strong" to 1f).forEach { (label, v) ->
+                        FilterChip(selected = kotlin.math.abs(current.intensity - v) < 0.05f,
+                            onClick = { onSet(current.copy(intensity = v)) }, label = { Text(label) })
+                    }
+                }
+            }
             ChipRow {
-                listOf(300L, 600L, 1000L, 1500L).forEach { d ->
+                Text("Length", style = MaterialTheme.typography.labelLarge)
+                listOf(300L, 600L, 1000L, 1500L, 2000L).forEach { d ->
                     FilterChip(selected = current.durationMs == d, onClick = { onSet(current.copy(durationMs = d)) },
                         label = { Text(String.format(Locale.ROOT, "%.1f s", d / 1000f)) })
                 }
             }
         }
     }
+}
+
+/** Chooses the type, keeping the duration/direction/intensity when switching between effects. */
+private fun pick(t: TransitionType, current: Transition): Transition =
+    if (t == TransitionType.NONE) Transition.NONE
+    else Transition(t, current.durationMs.takeIf { it in Transition.MIN_MS..Transition.MAX_MS } ?: t.defaultDurationMs,
+        current.direction, current.intensity)
+
+/** A tappable card: a faithful thumbnail (from the export maths) plus the transition name. */
+@Composable
+private fun TransitionCard(type: TransitionType, selected: Boolean, onPick: () -> Unit) {
+    val thumb = remember(type) {
+        // Standard cut has no effect; show the plain incoming clip so the card still reads.
+        if (type == TransitionType.NONE) TransitionPreview.frame(type, 0f, incoming = true, 96, 54)
+        else TransitionPreview.frame(type, 0.78f, incoming = false, 96, 54)
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(84.dp).clickable(onClick = onPick),
+    ) {
+        Box(
+            Modifier.size(84.dp, 47.dp).clip(RoundedCornerShape(8.dp))
+                .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else Modifier),
+        ) {
+            androidx.compose.foundation.Image(thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth())
+        }
+        Text(type.label, style = MaterialTheme.typography.labelSmall, maxLines = 2,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/** A small tile that animates the current transition across the cut (A tail → B head). */
+@Composable
+private fun TransitionDemo(current: Transition, modifier: Modifier = Modifier) {
+    val w = 128; val h = 72
+    if (current.type == TransitionType.NONE) {
+        // No effect: just show the two clips meeting at a hard cut.
+        val a = remember { TransitionPreview.frame(TransitionType.NONE, 0f, incoming = false, w, h) }
+        val b = remember { TransitionPreview.frame(TransitionType.NONE, 0f, incoming = true, w, h) }
+        Row(modifier.clip(RoundedCornerShape(8.dp))) {
+            androidx.compose.foundation.Image(a, null, contentScale = ContentScale.Crop, modifier = Modifier.width(64.dp).height(72.dp))
+            androidx.compose.foundation.Image(b, null, contentScale = ContentScale.Crop, modifier = Modifier.width(64.dp).height(72.dp))
+        }
+        return
+    }
+    var step by remember(current) { mutableStateOf(0) }
+    LaunchedEffect(current.type, current.direction, current.intensity) {
+        step = 0
+        while (true) {
+            kotlinx.coroutines.delay(170)
+            step = (step + 1) % TransitionPreview.DEMO_FRAMES
+        }
+    }
+    val frame = remember(current.type, current.direction, current.intensity, step) {
+        TransitionPreview.demoFrame(current.type, step, w, h, current.direction, current.intensity)
+    }
+    androidx.compose.foundation.Image(
+        frame, "Transition preview", contentScale = ContentScale.Crop,
+        modifier = modifier.size(128.dp, 72.dp).clip(RoundedCornerShape(8.dp)),
+    )
 }
 
 @Composable

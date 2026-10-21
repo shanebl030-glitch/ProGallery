@@ -10,3 +10,4 @@ build/
 *.keystore
 !debug.keystore
 keystore.properties
+scratchpad/

@@ -12,13 +12,17 @@ import androidx.media3.effect.BaseGlShaderProgram
 import androidx.media3.effect.GlEffect
 import androidx.media3.effect.GlShaderProgram
 import com.shaneblackburn.progallery.core.video.ClipEdge
+import com.shaneblackburn.progallery.core.video.TransitionUniforms
 
 /**
- * Per-clip transition effect: fade (to black/white), blur and zoom applied in the clip's
- * own time window(s). Applied as a clip effect (not a composition effect) because a
- * composition effect receives per-clip timestamps that reset at each clip, so it can't tell
- * where a boundary falls on the timeline. Each clip instead carries its own [ClipEdge],
- * which knows the clip duration and the transitions at both ends.
+ * Per-clip transition effect: fades, blur, zoom, cross-zoom, whip pan, push/slide, wipe, iris,
+ * light leak and glitch, applied in the clip's own time window(s).
+ *
+ * Applied as a CLIP effect (not a composition effect) because a composition effect receives
+ * per-clip timestamps that reset at each clip, so it can't tell where a boundary falls on the
+ * timeline. Each clip instead carries its own [ClipEdge], which knows the clip duration and the
+ * transitions at both ends, and resolves to [TransitionUniforms] per frame — the SAME maths the
+ * CPU reference (TransitionCpu) runs, so the preview, the export and the unit tests match.
  *
  * Placed last in a clip's video-effect list so the frame timestamps it sees are the clip's
  * 0-based output time (after speed/trim), matching [ClipEdge].
@@ -44,28 +48,31 @@ private class ClipTransitionShaderProgram(private val edge: ClipEdge, useHdr: Bo
     } catch (e: GlUtil.GlException) {
         throw VideoFrameProcessingException(e)
     }
-    private var texelW = 0f
-    private var texelH = 0f
     private var firstUs = Long.MIN_VALUE
 
-    override fun configure(inputWidth: Int, inputHeight: Int): Size {
-        texelW = 1f / inputWidth.coerceAtLeast(1)
-        texelH = 1f / inputHeight.coerceAtLeast(1)
-        return Size(inputWidth, inputHeight)
-    }
+    override fun configure(inputWidth: Int, inputHeight: Int): Size = Size(inputWidth, inputHeight)
 
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
         if (firstUs == Long.MIN_VALUE) firstUs = presentationTimeUs
         val tMs = (presentationTimeUs - firstUs) / 1000
-        val fx = edge.at(tMs)
+        val u: TransitionUniforms = edge.uniformsAt(tMs)
+        // A seed that changes a few times a second, so the glitch flickers.
+        val seed = ((presentationTimeUs / 60_000L) % 997L).toFloat()
         try {
             program.use()
             program.setSamplerTexIdUniform("uTexSampler", inputTexId, 0)
-            program.setFloatsUniform("uTexel", floatArrayOf(texelW, texelH))
-            program.setFloatUniform("uFade", fx.fade)
-            program.setFloatUniform("uWhite", if (fx.white) 1f else 0f)
-            program.setFloatUniform("uBlur", fx.blur)
-            program.setFloatUniform("uZoom", fx.zoom)
+            program.setFloatUniform("uScale", u.scale)
+            program.setFloatsUniform("uOff", floatArrayOf(u.offX, u.offY))
+            program.setFloatUniform("uBlur", u.blur)
+            program.setFloatUniform("uFade", u.fade)
+            program.setFloatsUniform("uFadeColor", floatArrayOf(u.fadeR, u.fadeG, u.fadeB))
+            program.setFloatUniform("uCover", u.cover)
+            program.setFloatUniform("uCoverMode", u.coverMode.toFloat())
+            program.setFloatUniform("uCoverAngle", u.coverAngle)
+            program.setFloatUniform("uLeak", u.leak)
+            program.setFloatsUniform("uLeakPos", floatArrayOf(u.leakX, u.leakY))
+            program.setFloatUniform("uGlitch", u.glitch)
+            program.setFloatUniform("uSeed", seed)
             program.bindAttributesAndUniforms()
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
             GlUtil.checkGlError()
@@ -88,6 +95,8 @@ void main() {
   vTex = vec2(aFramePosition.x * 0.5 + 0.5, aFramePosition.y * 0.5 + 0.5);
 }
 """
+
+        /** Mirrors com.shaneblackburn.progallery.core.video.TransitionCpu.render exactly. */
         const val FRAGMENT = """
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -95,39 +104,76 @@ precision highp float;
 precision mediump float;
 #endif
 uniform sampler2D uTexSampler;
-uniform vec2 uTexel;
-uniform float uFade;   // 0..1 blend toward the fade colour
-uniform float uWhite;  // 1 = fade to white, 0 = to black
-uniform float uBlur;   // 0..1
-uniform float uZoom;   // 0..1
+uniform float uScale;
+uniform vec2 uOff;
+uniform float uBlur;
+uniform float uFade;
+uniform vec3 uFadeColor;
+uniform float uCover;
+uniform float uCoverMode;   // 0 none, 1 wipe, 2 iris
+uniform float uCoverAngle;
+uniform float uLeak;
+uniform vec2 uLeakPos;
+uniform float uGlitch;
+uniform float uSeed;
 varying vec2 vTex;
 
+float hashf(float x) { return fract(sin(x * 12.9898) * 43758.5453); }
+
+vec3 tap(vec2 uv) {
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec3(0.0);
+  return texture2D(uTexSampler, uv).rgb;
+}
+
+vec3 sampleBlur(vec2 uv) {
+  if (uBlur <= 0.0) return tap(uv);
+  float s = uBlur;
+  vec3 c = tap(uv) * 0.25;
+  c += tap(uv + vec2( s, 0.0)) * 0.125;
+  c += tap(uv + vec2(-s, 0.0)) * 0.125;
+  c += tap(uv + vec2(0.0,  s)) * 0.125;
+  c += tap(uv + vec2(0.0, -s)) * 0.125;
+  c += tap(uv + vec2( s,  s)) * 0.0625;
+  c += tap(uv + vec2(-s,  s)) * 0.0625;
+  c += tap(uv + vec2( s, -s)) * 0.0625;
+  c += tap(uv + vec2(-s, -s)) * 0.0625;
+  return c;
+}
+
 void main() {
-  vec2 uv = vTex;
-  if (uZoom > 0.0) {
-    float scale = 1.0 + uZoom * 0.3;        // punch in up to 30%
-    uv = (uv - 0.5) / scale + 0.5;
+  vec2 p = vTex;
+  vec2 uv = (p - 0.5) / uScale + 0.5 - uOff;
+  if (uGlitch > 0.0) {
+    float band = floor(p.y * 18.0);
+    float r = hashf(band + uSeed);
+    if (r > 1.0 - uGlitch * 0.6) uv.x += (hashf(band * 1.7 + uSeed) - 0.5) * uGlitch * 0.25;
   }
-  vec3 c;
-  if (uBlur > 0.0) {
-    vec2 s = uTexel * (uBlur * 6.0);
-    c  = texture2D(uTexSampler, uv).rgb * 0.25;
-    c += texture2D(uTexSampler, uv + vec2( s.x, 0.0)).rgb * 0.125;
-    c += texture2D(uTexSampler, uv + vec2(-s.x, 0.0)).rgb * 0.125;
-    c += texture2D(uTexSampler, uv + vec2(0.0,  s.y)).rgb * 0.125;
-    c += texture2D(uTexSampler, uv + vec2(0.0, -s.y)).rgb * 0.125;
-    c += texture2D(uTexSampler, uv + vec2( s.x,  s.y)).rgb * 0.0625;
-    c += texture2D(uTexSampler, uv + vec2(-s.x,  s.y)).rgb * 0.0625;
-    c += texture2D(uTexSampler, uv + vec2( s.x, -s.y)).rgb * 0.0625;
-    c += texture2D(uTexSampler, uv + vec2(-s.x, -s.y)).rgb * 0.0625;
-  } else {
-    c = texture2D(uTexSampler, uv).rgb;
+  vec3 c = sampleBlur(uv);
+  if (uGlitch > 0.0) {
+    float off = uGlitch * 0.02;
+    c.r = sampleBlur(uv + vec2(off, 0.0)).r;
+    c.b = sampleBlur(uv - vec2(off, 0.0)).b;
   }
-  if (uFade > 0.0) {
-    vec3 target = vec3(uWhite);
-    c = mix(c, target, uFade);
+  float cover = 0.0;
+  if (uCoverMode > 1.5) {
+    // Iris: everything outside a shrinking circle goes black.
+    float d = distance(p, vec2(0.5));
+    float rad = (1.0 - uCover) * 0.75;
+    cover = smoothstep(rad, rad + 0.03, d);
+  } else if (uCoverMode > 0.5) {
+    // Wipe: a moving line; the side with coordinate < uCover is black.
+    vec2 n = vec2(cos(uCoverAngle), sin(uCoverAngle));
+    float s = dot(p - 0.5, n) + 0.5;
+    cover = 1.0 - smoothstep(uCover - 0.03, uCover + 0.03, s);
   }
-  gl_FragColor = vec4(c, 1.0);
+  c *= (1.0 - cover);
+  if (uLeak > 0.0) {
+    float d = distance(p, uLeakPos);
+    float g = (1.0 - smoothstep(0.0, 0.7, d)) * uLeak;
+    c += vec3(1.0, 0.9, 0.7) * g;
+  }
+  c = mix(c, uFadeColor, uFade);
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }
 """
     }

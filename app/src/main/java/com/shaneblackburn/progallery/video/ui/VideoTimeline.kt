@@ -290,6 +290,14 @@ private fun TransitionButton(type: TransitionType, selected: Boolean, onClick: (
                     TransitionType.FADE_WHITE -> "○"
                     TransitionType.BLUR -> "❋"
                     TransitionType.ZOOM -> "⤢"
+                    TransitionType.CROSS_ZOOM -> "✺"
+                    TransitionType.WHIP_PAN -> "»"
+                    TransitionType.PUSH -> "⇥"
+                    TransitionType.WIPE -> "▚"
+                    TransitionType.IRIS -> "◉"
+                    TransitionType.LIGHT_LEAK -> "✷"
+                    TransitionType.GLITCH -> "⚡"
+                    TransitionType.CROSS_DISSOLVE -> "◎"
                 },
                 fontSize = 11.sp,
                 color = if (selected || type != TransitionType.NONE) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
