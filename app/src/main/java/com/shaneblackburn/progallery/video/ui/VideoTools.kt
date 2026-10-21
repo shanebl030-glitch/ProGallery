@@ -128,7 +128,7 @@ fun ClipTools(
                     }
                 }
             }
-            ClipTab.COLOUR -> Column(Modifier.verticalScroll(rememberScrollState())) {
+            ClipTab.COLOUR -> Column {
                 val c = clip.color
                 ValueSlider("Brightness", c.brightness, -1f..1f, onStart, { v -> onPreview { it.copy(color = it.color.copy(brightness = v)) } }, { onCommit { it.copy(color = it.color.copy(brightness = 0f)) } })
                 ValueSlider("Contrast", c.contrast, -1f..1f, onStart, { v -> onPreview { it.copy(color = it.color.copy(contrast = v)) } }, { onCommit { it.copy(color = it.color.copy(contrast = 0f)) } })
@@ -194,7 +194,7 @@ fun TextTools(
     onPreview: (TimedText) -> Unit,
     onCommit: (TimedText) -> Unit,
 ) {
-    Column(Modifier.verticalScroll(rememberScrollState())) {
+    Column {
         Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ToolButton("Edit", Icons.Outlined.Edit, onClick = onEdit)
             ToolButton("Delete", Icons.Outlined.Delete, onClick = onDelete)
@@ -227,7 +227,7 @@ fun MusicTools(
     onPreview: (MusicTrack) -> Unit,
     onCommit: (MusicTrack) -> Unit,
 ) {
-    Column(Modifier.verticalScroll(rememberScrollState())) {
+    Column {
         Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ToolButton("Replace", Icons.Outlined.LibraryMusic, onClick = onReplace)
             ToolButton("Remove", Icons.Outlined.Delete, onClick = onRemove)

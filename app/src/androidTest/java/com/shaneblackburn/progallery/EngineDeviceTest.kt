@@ -293,6 +293,32 @@ class EngineDeviceTest {
         assertTrue(ready, "preview never became ready")
     }
 
+    /** Regression: the editor's preview is rebuilt after every edit; each rebuild must work. */
+    @Test fun previewSurvivesRepeatedRebuilds() {
+        var ready = CountDownLatch(1)
+        var error: String? = null
+        var controller: com.shaneblackburn.progallery.video.PreviewController? = null
+        instrumentation.runOnMainSync {
+            controller = com.shaneblackburn.progallery.video.PreviewController(
+                ctx, onError = { if (it != null) error = it }, onReady = { ready.countDown() })
+        }
+        val projects = listOf(
+            VideoProject(listOf(clip())),
+            VideoProject(listOf(clip()), fadeIn = Fade(500)),
+            VideoProject(listOf(clip().copy(filter = VideoFilter.SEPIA)), texts = listOf(TimedText(1, "Hi", 0, 1500))),
+            VideoProject(listOf(clip(), clip().copy(id = 2, speed = 2f))),
+        )
+        for ((i, p) in projects.withIndex()) {
+            ready = CountDownLatch(1)
+            var shown = false
+            instrumentation.runOnMainSync { shown = controller!!.show(p, 500) }
+            assertTrue(shown, "rebuild $i: show() failed: $error")
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "rebuild $i never became ready: $error")
+            assertEquals(null, error, "rebuild $i error")
+        }
+        instrumentation.runOnMainSync { controller?.release() }
+    }
+
     // ------------------------------------------------------------ app icon
 
     @Test fun launcherIconIsAdaptiveWithMonochrome() {

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
@@ -63,9 +64,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.transformer.CompositionPlayer
 import androidx.media3.ui.PlayerView
 import com.shaneblackburn.progallery.R
 import com.shaneblackburn.progallery.core.format.Formatters
@@ -74,7 +73,7 @@ import com.shaneblackburn.progallery.core.video.TimedText
 import com.shaneblackburn.progallery.ui.theme.ProGalleryTheme
 import com.shaneblackburn.progallery.ui.theme.ThemeMode
 import com.shaneblackburn.progallery.video.ExportState
-import com.shaneblackburn.progallery.video.ProjectComposer
+import com.shaneblackburn.progallery.video.PreviewController
 import com.shaneblackburn.progallery.video.VideoEditorViewModel
 import com.shaneblackburn.progallery.video.VideoExportSettings
 import kotlinx.coroutines.delay
@@ -118,48 +117,28 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
     LaunchedEffect(item.id) { vm.open(item) }
     LaunchedEffect(error) { error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); vm.clearError() } }
 
-    // ---- Preview player (same Composition as export)
-    val player = remember { CompositionPlayer.Builder(context).build() }
-    DisposableEffect(Unit) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                previewError = "Preview unavailable: ${error.errorCodeName}"
-            }
-        }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener); player.release() }
+    // ---- Preview player (same Composition as export; rebuilt on every change)
+    val preview = remember {
+        PreviewController(context, onPlayingChanged = { playing = it }, onError = { previewError = it })
     }
+    DisposableEffect(Unit) { onDispose { preview.release() } }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) player.pause() }
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) preview.pause() }
         lifecycle.addObserver(obs)
         onDispose { lifecycle.removeObserver(obs) }
     }
-    // Rebuild the preview composition shortly after the project stops changing.
+    // Rebuild the preview shortly after the project stops changing.
     LaunchedEffect(Unit) {
         vm.history.map { it.current }
             .distinctUntilChanged()
             .debounce(350)
-            .collect { p ->
-                if (p.clips.isEmpty()) return@collect
-                try {
-                    val wasPlaying = player.isPlaying
-                    val pos = positionMs.coerceIn(0, maxOf(0, p.durationMs - 1))
-                    player.setComposition(ProjectComposer.build(p))
-                    player.prepare()
-                    player.seekTo(pos)
-                    if (wasPlaying) player.play()
-                    previewError = null
-                } catch (e: Exception) {
-                    previewError = "Preview unavailable: ${e.message ?: e.javaClass.simpleName}"
-                }
-            }
+            .collect { p -> if (p.clips.isNotEmpty()) preview.show(p, positionMs) }
     }
     // Keep the timeline under the playhead while playing.
     LaunchedEffect(playing) {
         while (playing) {
-            positionMs = player.currentPosition
+            positionMs = preview.currentPositionMs
             scroll.scrollTo((positionMs * pxPerMs).roundToInt())
             delay(33)
         }
@@ -169,7 +148,7 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
         snapshotFlow { scroll.value to scroll.isScrollInProgress }.collect { (v, active) ->
             if (active && !playing) {
                 positionMs = (v / pxPerMs).toLong().coerceIn(0, maxOf(0, vm.project.durationMs))
-                player.seekTo(positionMs)
+                preview.seekTo(positionMs)
             }
         }
     }
@@ -204,9 +183,9 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
                 AndroidView(
                     factory = { ctx ->
                         (LayoutInflater.from(ctx).inflate(R.layout.composition_player_view, FrameLayout(ctx), false) as PlayerView)
-                            .apply { this.player = player }
+                            .also { preview.attach(it) }
                     },
-                    onRelease = { it.player = null },
+                    onRelease = { preview.attach(null) },
                     modifier = Modifier.fillMaxSize(),
                 )
                 previewError?.let {
@@ -219,9 +198,9 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
         // Transport row
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
-                if (player.isPlaying) player.pause() else {
-                    if (positionMs >= project.durationMs - 50) player.seekTo(0)
-                    player.play()
+                if (preview.isPlaying) preview.pause() else {
+                    if (positionMs >= project.durationMs - 50) preview.seekTo(0)
+                    preview.play()
                 }
             }) { Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pause" else "Play") }
             Text("${Formatters.timecode(positionMs)} / ${Formatters.timecode(project.durationMs)}",
@@ -244,7 +223,13 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
         )
 
         // Tools
-        Column(Modifier.fillMaxWidth().heightIn(min = 130.dp).navigationBarsPadding()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 130.dp, max = 250.dp)
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding(),
+        ) {
             when (val sel = selection) {
                 is TimelineSelection.ClipSel -> project.clips.getOrNull(sel.index)?.let { clip ->
                     ClipTools(
@@ -368,7 +353,7 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
                 onDismiss = { showExport = false },
                 onExport = {
                     if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    player.pause()
+                    preview.pause()
                     vm.startExport(settings)
                 },
             )

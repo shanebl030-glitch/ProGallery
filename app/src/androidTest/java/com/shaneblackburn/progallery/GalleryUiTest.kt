@@ -45,7 +45,8 @@ class GalleryUiTest {
         ui.tapText("Albums")
         ui.text("PGTest")
         Shots.take("02_albums")
-        ui.tapText("PGTest")
+        // Two "PGTest" albums exist (photos and video); open the one with 3 photos.
+        ui.tapText("3")
         ui.desc(TestMedia.PHOTOS[0])
         Shots.take("03_album_opened")
         ui.back()

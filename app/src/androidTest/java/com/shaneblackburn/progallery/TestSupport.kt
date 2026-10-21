@@ -143,10 +143,9 @@ object TestMedia {
 /** Saves screenshots where CI collects them. */
 object Shots {
     private val dirs: List<File> by lazy {
-        val out = mutableListOf<File>()
-        InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let { out += File(it) }
-        TestMedia.context.getExternalFilesDir("screenshots")?.let { out += it }
-        out
+        // App-private external folder: not indexed by MediaStore, so screenshots never
+        // show up inside the gallery under test.
+        listOfNotNull(TestMedia.context.getExternalFilesDir("screenshots"))
     }
 
     fun take(name: String) {

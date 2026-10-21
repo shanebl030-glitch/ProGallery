@@ -30,9 +30,9 @@ class EditorUiTest {
         Shots.take("20_photo_editor_adjust")
 
         ui.tapText("Filters")
-        ui.tapText("Noir")
+        ui.tapText("Warm")
         Thread.sleep(1500)
-        Shots.take("21_photo_editor_filter_noir")
+        Shots.take("21_photo_editor_filter")
 
         ui.tapText("Crop")
         ui.tapText("1:1")
@@ -70,7 +70,9 @@ class EditorUiTest {
         ui.tapText("Text")
         ui.obj(By.clazz("android.widget.EditText")).text = "ProGallery test"
         ui.tapText("Done")
-        Thread.sleep(1500)
+        Thread.sleep(2500)
+        // The preview must survive edits (it is rebuilt after every change).
+        assertTrue(!ui.has(By.textStartsWith("Preview unavailable"), 1_000), "preview still working after edits")
         Shots.take("31_video_editor_title")
 
         val exportButtons = { ui.device.findObjects(By.text("Export")).sortedBy { it.visibleBounds.top } }

@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -311,7 +313,13 @@ private fun EditorContent(item: MediaItem, onClose: () -> Unit, onSaved: (Uri?) 
 
         // ---- Tool panel
         val ready = load as? EditorLoad.Ready
-        Column(Modifier.fillMaxWidth().heightIn(min = 150.dp).padding(top = 4.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 150.dp, max = 260.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(top = 4.dp),
+        ) {
             if (ready != null) {
                 when (tool) {
                     EditorTool.CROP -> CropPanel(state, ready.width, ready.height, aspect, { aspect = it }, vm::beginChange, vm::previewChange, vm::commit)
