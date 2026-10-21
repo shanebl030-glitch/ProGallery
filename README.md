@@ -21,6 +21,13 @@ signed with the same key (see Signing). Settings, favourites and hidden albums a
 **Rolling back:** uninstall, then install the older APK (resets ProGallery's own settings;
 your photos and videos are never affected).
 
+**From v0.1.0 to v0.2.0 (one time only):** v0.1.0 was signed with a temporary CI key that
+no longer exists, so Android will refuse to install 0.2.0 over it ("App not installed" /
+"conflicts with an existing package"). Uninstall v0.1.0 first, then install 0.2.0. This
+resets ProGallery's own settings, favourites and hidden-album list; photos and videos are
+untouched. The 0.2.0 APK delivered by hand is signed with the permanent key, so every
+later version signed with that key installs over it in place.
+
 ## Signing (needed for in-place updates)
 Android installs an update over an existing app only if both APKs carry the same signing
 certificate. CI signs release APKs with a permanent personal key when these two GitHub

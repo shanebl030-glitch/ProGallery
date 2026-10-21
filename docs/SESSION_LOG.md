@@ -30,3 +30,17 @@
 - Confirmed v0.1.0 was signed with a temporary per-run CI key (cert 7dad21ce…), so 0.2.0
   can't update it in place; the permanent key (SHA-256 B0:0A:A0:37…) is used once the
   repository secrets are set.
+- Diagnosed the "photo editor preview doesn't update" problem with render-timing logs and
+  a thread dump from the emulator: the filter render took ~19 s (per-pixel ThreadLocal
+  lookups + filter thumbnails competing for the 1-thread ForkJoin pool on a 2-core
+  emulator). Fixed in the pipeline; render now ~1–1.5 s on the CI emulator.
+- CI emulator switched to the plain AOSP image with all runner cores (the Google image
+  overloaded it: System UI crashes, ANRs, black screenshots).
+- The AOSP image's 3-button navigation exposed Settings/Guide content hidden behind the
+  nav bar — fixed. Video editor Back now deselects before offering to discard.
+- Device suite: 18/18 pass (run 39543681545, commit ec47e05).
+- Added a release-APK smoke test (adb-driven gallery → photo edit/save → video export)
+  because the instrumented suite exercises the debug build, not the minified release.
+- Release APK for Shane re-signed locally with the permanent key (cert B0:0A:A0:37…) using
+  uber-apk-signer 1.3.0 (apksig); verified with apksig and androguard (v1/v2/v3, no
+  INTERNET permission).
