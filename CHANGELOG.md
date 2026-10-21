@@ -4,6 +4,14 @@ All notable changes to ProGallery. Versions follow semantic versioning.
 
 ## [0.3.2] — 2026-10-22 — frame-step + more transitions
 
+### Fixed
+- **Transitions now actually render at clip boundaries.** They were applied as a
+  whole-composition effect, which receives per-clip timestamps (reset at each clip), so the
+  effect was zero exactly at every boundary — fades between clips, and the new blur/zoom,
+  never showed. Transitions are now applied per clip (like the colour grade), computed from
+  each clip's own time, so they appear correctly on both sides of a cut. (Project fade-in/out
+  at the very start/end already worked and still do.)
+
 ### Added
 - **Frame-step** buttons (‹ ›) in the transport bar: nudge the playhead by exactly one
   frame to land a cut precisely. Uses the clip's real frame rate (probed; 30 fps default)
