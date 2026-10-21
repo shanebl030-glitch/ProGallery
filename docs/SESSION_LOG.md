@@ -82,3 +82,25 @@
   scroll was made robust with raw swipe gestures.
 - CI emulator remained flaky (two boot/hang failures and one androidTest compile error —
   a missing Uri import — before the green run).
+
+## 2026-10-22 — Session 6 (v0.3.2, frame-step + transitions)
+- Shane confirmed the HDR/simplified-preview fix works (an 8-bit H.264 WhatsApp video now
+  previews via the fallback). Requested: more transitions, and frame-step for exact cuts.
+- Added frame-step (‹ ›) in the transport bar (clip frame rate probed), and Blur + Zoom
+  transitions.
+- Found and fixed a real bug: transitions were applied as a whole-composition effect, which
+  receives per-clip timestamps (reset at each clip), so the effect was zero exactly at every
+  boundary — fades between clips and the new blur/zoom never rendered (confirmed by
+  inspecting exported boundary frames: plain/blur/zoom were identical). Reworked transitions
+  to apply per clip (ClipEdge + ClipTransitionEffect), like the colour grade which is proven
+  to work on-device.
+- Also surfaced the exact reason the full-effects preview falls back (tappable details), to
+  diagnose why CompositionPlayer fails on Shane's phone even for SDR video.
+- Hardened PreviewController release (CompositionPlayer.release can throw).
+- Testing: 66 core tests pass (incl. per-clip transition edge math). The last HEALTHY CI run
+  (39f12c9) ran the full device suite (frame-step, transition UI, exports all exercised);
+  its only real failure was blur not rendering at the boundary — the bug now fixed.
+- BLOCKER: GitHub's hosted Android emulator was in a sustained outage for several hours
+  (~12 consecutive device-job boot/runner failures across re-runs and fresh pushes), so the
+  per-clip transition RENDERING and the release smoke could not be re-verified in CI for the
+  final commit. Code compiles every time; delivered with this caveat for on-phone check.
