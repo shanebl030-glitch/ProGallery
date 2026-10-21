@@ -16,12 +16,16 @@ import com.shaneblackburn.progallery.ProGalleryApp
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.MusicTrack
+import com.shaneblackburn.progallery.core.video.ProjectDoc
 import com.shaneblackburn.progallery.core.video.VideoProject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -49,11 +53,12 @@ data class ProjectHistory(
     fun redo() = if (future.isEmpty()) this else copy(past = past + current, current = future.first(), future = future.drop(1))
 }
 
-@OptIn(UnstableApi::class)
+@OptIn(UnstableApi::class, kotlinx.coroutines.FlowPreview::class)
 class VideoEditorViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProGalleryApp
     val export: VideoExportManager get() = app.videoExport
+    private val store: ProjectStore get() = app.projects
 
     private val _history = MutableStateFlow(ProjectHistory())
     val history: StateFlow<ProjectHistory> = _history.asStateFlow()
@@ -65,31 +70,94 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Clip/music URIs that can no longer be opened (deleted, moved, or access removed). */
+    private val _missing = MutableStateFlow<Set<String>>(emptySet())
+    val missing: StateFlow<Set<String>> = _missing.asStateFlow()
+
     /** Thumbnails per clip uri: list of frames across the whole source. */
     private val thumbCache = ConcurrentHashMap<String, List<ImageBitmap>>()
     private val _thumbs = MutableStateFlow<Map<String, List<ImageBitmap>>>(emptyMap())
     val thumbs: StateFlow<Map<String, List<ImageBitmap>>> = _thumbs.asStateFlow()
     private val thumbLimiter = Semaphore(2)
 
-    var sourceName: String = "Video"
-        private set
-    var sourceFolder: String = "Movies/ProGallery/"
-        private set
+    /** The saved-project record this session edits (id, name, export folder). */
+    private val _doc = MutableStateFlow<ProjectDoc?>(null)
+    val doc: StateFlow<ProjectDoc?> = _doc.asStateFlow()
+
+    /**
+     * True when the project existed in the Projects list before this session, or the user
+     * created it explicitly (New video). A project started with "Edit" on a single video is
+     * only kept once the user asks to keep it.
+     */
+    private val _persisted = MutableStateFlow(false)
+    val persisted: StateFlow<Boolean> = _persisted.asStateFlow()
+
+    val sourceName: String get() = _doc.value?.name ?: "Video"
+    val sourceFolder: String get() = _doc.value?.exportFolder ?: "Movies/ProGallery/"
 
     private var started = false
 
+    init {
+        // Autosave: shortly after each change, write the project if it's being kept.
+        viewModelScope.launch {
+            _history.map { it.current }.distinctUntilChanged().debounce(700).collect { saveNow() }
+        }
+    }
+
+    /** "Edit" on a single video from the viewer. */
     fun open(item: MediaItem) {
         if (started) return
         started = true
-        sourceName = item.name.substringBeforeLast('.')
-        sourceFolder = item.relativePath.ifBlank { "Movies/ProGallery/" }
         viewModelScope.launch {
-            val clip = probeClip(Uri.parse(item.uri), item.name)
+            val clip = probe(item)
             if (clip == null) {
                 _error.value = "Couldn't read this video."
             } else {
+                _doc.value = store.newDoc(VideoProject(listOf(clip)), item.name.substringBeforeLast('.'),
+                    item.relativePath.ifBlank { "Movies/ProGallery/" })
                 _history.value = ProjectHistory(current = VideoProject(listOf(clip)))
                 loadThumbs(clip)
+            }
+            _loading.value = false
+        }
+    }
+
+    /** "New video" from picked photos and videos; the project is kept straight away. */
+    fun openNew(items: List<MediaItem>) {
+        if (started) return
+        started = true
+        viewModelScope.launch {
+            val clips = items.mapNotNull { probe(it) }
+            if (clips.isEmpty()) {
+                _error.value = "Couldn't read the selected items."
+            } else {
+                val project = VideoProject(clips)
+                val name = "Video " + java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+                _doc.value = store.newDoc(project, name, "Movies/ProGallery/")
+                _persisted.value = true
+                _history.value = ProjectHistory(current = project)
+                saveNow()
+                clips.forEach { loadThumbs(it) }
+                if (clips.size < items.size) _error.value = "${items.size - clips.size} item(s) couldn't be read and were skipped."
+            }
+            _loading.value = false
+        }
+    }
+
+    /** Resume a saved project. */
+    fun openProject(id: String) {
+        if (started) return
+        started = true
+        viewModelScope.launch {
+            val d = store.load(id)
+            if (d == null) {
+                _error.value = "This project couldn't be opened."
+            } else {
+                _doc.value = d
+                _persisted.value = true
+                _history.value = ProjectHistory(current = d.project)
+                checkMissing(d.project)
+                d.project.clips.distinctBy { it.uri }.filter { it.uri !in _missing.value }.forEach { loadThumbs(it) }
             }
             _loading.value = false
         }
@@ -102,23 +170,50 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
     fun undo() = _history.update { it.undo() }
     fun redo() = _history.update { it.redo() }
 
-    fun addClip(uri: Uri) {
+    /** Appends photos/videos picked in the in-app picker. */
+    fun addMedia(items: List<MediaItem>) {
         viewModelScope.launch {
-            val name = displayName(uri) ?: "Clip"
-            val clip = probeClip(uri, name)
-            if (clip == null) { _error.value = "Couldn't add that video."; return@launch }
-            commit { it.copy(clips = it.clips + clip) }
-            loadThumbs(clip)
+            val clips = items.mapNotNull { probe(it) }
+            if (clips.isNotEmpty()) commit { it.copy(clips = it.clips + clips) }
+            clips.forEach { loadThumbs(it) }
+            if (clips.size < items.size) _error.value = "${items.size - clips.size} item(s) couldn't be added."
         }
+    }
+
+    /** Removes every clip (and music) whose source can't be opened any more. */
+    fun removeMissing() {
+        val gone = _missing.value
+        commit { p ->
+            var q = p
+            for (i in p.clips.indices.reversed()) if (p.clips[i].uri in gone) q = q.removeClip(i)
+            if (q.music?.uri in gone) q = q.copy(music = null)
+            q
+        }
+        _missing.value = emptySet()
     }
 
     fun setMusic(uri: Uri) {
         viewModelScope.launch {
+            // Keep access across restarts so a saved project can still play its music.
+            runCatching {
+                getApplication<Application>().contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             val dur = withContext(Dispatchers.IO) { durationOf(uri) }
             if (dur <= 0) { _error.value = "Couldn't read that audio file."; return@launch }
             val name = displayName(uri) ?: "Music"
             commit { it.copy(music = MusicTrack(uri.toString(), name, dur)) }
         }
+    }
+
+    fun rename(name: String) {
+        _doc.update { it?.copy(name = name.trim().ifEmpty { it.name }) }
+        viewModelScope.launch { saveNow() }
+    }
+
+    /** Keep a project that was started from a single video (adds it to Video projects). */
+    fun keepProject() {
+        _persisted.value = true
+        viewModelScope.launch { saveNow() }
     }
 
     fun clearError() { _error.value = null }
@@ -127,7 +222,54 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
         export.start(project, settings, sourceName, sourceFolder)
     }
 
+    private suspend fun saveNow() {
+        val d = _doc.value ?: return
+        if (!_persisted.value || project.isEmpty) return
+        runCatching { _doc.value = store.save(d.copy(project = project)) }
+            .onFailure { Log.e(TAG, "autosave failed", it); _error.value = "Couldn't save the project (${it.message})." }
+    }
+
+    override fun onCleared() {
+        // Final save of any change made in the last debounce window.
+        if (_persisted.value) kotlinx.coroutines.runBlocking { saveNow() }
+    }
+
+    private suspend fun checkMissing(p: VideoProject) {
+        val uris = (p.clips.map { it.uri } + listOfNotNull(p.music?.uri)).distinct()
+        _missing.value = withContext(Dispatchers.IO) {
+            uris.filterNot { u ->
+                runCatching { getApplication<Application>().contentResolver.openFileDescriptor(Uri.parse(u), "r")?.use { true } ?: false }
+                    .getOrDefault(false)
+            }.toSet()
+        }
+    }
+
     // ---- media probing ----
+
+    /** Builds a clip for a gallery item (photo or video); null if it can't be read. */
+    private suspend fun probe(item: MediaItem): Clip? =
+        if (item.isImage) probeImage(item) else probeClip(Uri.parse(item.uri), item.name)
+
+    private suspend fun probeImage(item: MediaItem): Clip? = withContext(Dispatchers.IO) {
+        val uri = Uri.parse(item.uri)
+        var w = item.displayWidth
+        var h = item.displayHeight
+        if (w <= 0 || h <= 0) {
+            // MediaStore sometimes lacks dimensions; read them from the file (EXIF-rotated).
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            runCatching { getApplication<Application>().contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) } }
+            if (opts.outWidth <= 0) return@withContext null
+            val rot = runCatching {
+                getApplication<Application>().contentResolver.openInputStream(uri)?.use { androidx.exifinterface.media.ExifInterface(it).rotationDegrees } ?: 0
+            }.getOrDefault(0)
+            w = if (rot % 180 == 90) opts.outHeight else opts.outWidth
+            h = if (rot % 180 == 90) opts.outWidth else opts.outHeight
+        }
+        Clip(
+            id = System.nanoTime(), uri = item.uri, name = item.name, sourceDurationMs = Clip.DEFAULT_IMAGE_MS,
+            width = w, height = h, hasAudio = false, isImage = true, mimeType = item.mimeType.ifBlank { null },
+        ).withImageDuration(Clip.DEFAULT_IMAGE_MS)
+    }
 
     private suspend fun probeClip(uri: Uri, name: String): Clip? = withContext(Dispatchers.IO) {
         val mmr = MediaMetadataRetriever()
@@ -172,6 +314,15 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
     /** Extracts ~1 frame per 1.5 s (max 40) of the whole source for the timeline strip. */
     private fun loadThumbs(clip: Clip): Job = viewModelScope.launch(Dispatchers.IO) {
         if (thumbCache.containsKey(clip.uri)) return@launch
+        if (clip.isImage) {
+            thumbLimiter.withPermit {
+                val bmp = runCatching {
+                    getApplication<Application>().contentResolver.loadThumbnail(Uri.parse(clip.uri), android.util.Size(240, 240), null)
+                }.getOrNull()
+                if (bmp != null) { thumbCache[clip.uri] = listOf(bmp.asImageBitmap()); _thumbs.value = HashMap(thumbCache) }
+            }
+            return@launch
+        }
         thumbLimiter.withPermit {
             val mmr = MediaMetadataRetriever()
             try {

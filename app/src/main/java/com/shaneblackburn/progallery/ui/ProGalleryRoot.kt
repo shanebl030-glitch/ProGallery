@@ -67,7 +67,9 @@ import androidx.navigation.navArgument
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.query.SmartCollection
 import com.shaneblackburn.progallery.editor.ui.EditorScreen
+import com.shaneblackburn.progallery.video.ui.ProjectsScreen
 import com.shaneblackburn.progallery.video.ui.VideoEditorScreen
+import com.shaneblackburn.progallery.video.ui.VideoOpen
 import com.shaneblackburn.progallery.ui.components.ErrorView
 import com.shaneblackburn.progallery.ui.components.LoadingView
 import com.shaneblackburn.progallery.ui.components.MessageView
@@ -283,8 +285,37 @@ private fun NavGraph(
                 onOpenTrash = { nav.navigate("trash") },
                 onOpenHidden = { nav.navigate("hidden") },
                 onOpenSettings = { nav.navigate("settings") },
+                onOpenProjects = { nav.navigate("projects") },
                 bottomPadding = barPadding,
             )
+        }
+        composable("projects") {
+            val timeline by vm.timeline.collectAsState()
+            ProjectsScreen(
+                pickerItems = timeline,
+                onBack = { nav.popBackStack() },
+                onOpen = { id -> nav.navigate("videoproject/$id") },
+                onNew = { items -> nav.navigate("videonew/" + items.joinToString(",") { it.id.toString() }) },
+            )
+        }
+        composable("videoproject/{pid}", arguments = listOf(navArgument("pid") { type = NavType.StringType })) { entry ->
+            val pid = entry.arguments?.getString("pid").orEmpty()
+            val timeline by vm.timeline.collectAsState()
+            VideoEditorScreen(remember(pid) { VideoOpen.Project(pid) }, timeline, onClose = { nav.popBackStack() })
+        }
+        composable("videonew/{ids}", arguments = listOf(navArgument("ids") { type = NavType.StringType })) { entry ->
+            val ids = remember { entry.arguments?.getString("ids").orEmpty().split(',').mapNotNull { it.toLongOrNull() } }
+            // Keep the order the items were picked in.
+            val open = remember(ids) {
+                val byId = vm.itemsByIds(ids.toSet()).associateBy { it.id }
+                VideoOpen.New(ids.mapNotNull { byId[it] })
+            }
+            val timeline by vm.timeline.collectAsState()
+            VideoEditorScreen(open, timeline, onClose = { nav.popBackStack() }, onCreated = { pid ->
+                // Swap the "new" route for the saved project, so restoring the screen after the
+                // app is killed reopens this project instead of creating a duplicate.
+                nav.navigate("videoproject/$pid") { popUpTo("videonew/{ids}") { inclusive = true } }
+            })
         }
         composable("search") {
             SearchScreen(vm, onOpen = { openViewer(MediaSource.Search, it) }, bottomPadding = barPadding)
@@ -355,7 +386,8 @@ private fun NavGraph(
             if (item == null) {
                 LaunchedEffect(Unit) { nav.popBackStack() }
             } else {
-                if (item.isVideo) VideoEditorScreen(item, onClose = { nav.popBackStack() })
+                val timeline by vm.timeline.collectAsState()
+                if (item.isVideo) VideoEditorScreen(remember(item.id) { VideoOpen.Item(item) }, timeline, onClose = { nav.popBackStack() })
                 else EditorScreen(item, onClose = { nav.popBackStack() }, onSaved = { nav.popBackStack() })
             }
         }

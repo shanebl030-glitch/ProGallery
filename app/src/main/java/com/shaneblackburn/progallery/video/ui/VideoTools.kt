@@ -50,6 +50,7 @@ import com.shaneblackburn.progallery.core.video.TextAnimation
 import com.shaneblackburn.progallery.core.video.TimedText
 import com.shaneblackburn.progallery.core.video.Transition
 import com.shaneblackburn.progallery.core.video.TransitionType
+import com.shaneblackburn.progallery.core.video.VideoColor
 import com.shaneblackburn.progallery.core.video.VideoFilter
 import com.shaneblackburn.progallery.core.video.VideoProject
 import com.shaneblackburn.progallery.editor.ui.ChipRow
@@ -78,17 +79,27 @@ fun ClipTools(
     onCommit: ((Clip) -> Clip) -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(ClipTab.EDIT) }
+    // Photos have no speed or sound.
+    val tabs = if (clip.isImage) listOf(ClipTab.EDIT, ClipTab.COLOUR, ClipTab.FILTER) else ClipTab.entries
+    if (tab !in tabs) tab = ClipTab.EDIT
     Column {
         ChipRow {
-            ClipTab.entries.forEach { t -> FilterChip(selected = tab == t, onClick = { tab = t }, label = { Text(t.label) }) }
+            tabs.forEach { t -> FilterChip(selected = tab == t, onClick = { tab = t }, label = { Text(t.label) }) }
         }
         when (tab) {
             ClipTab.EDIT -> Column {
-                Text(
-                    "Drag the clip's edges to trim · ${Formatters.timecode(clip.trimStartMs)}–${Formatters.timecode(clip.trimEndMs)}",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                )
+                if (clip.isImage) {
+                    ValueSlider("Photo duration", clip.timelineDurationMs / 1000f, 0.5f..15f, onStart,
+                        onChange = { v -> onPreview { it.withImageDuration((v * 1000).roundToInt().toLong()) } },
+                        onReset = { onCommit { it.withImageDuration(Clip.DEFAULT_IMAGE_MS) } },
+                        format = { v -> String.format(Locale.ROOT, "%.1f s", v) })
+                } else {
+                    Text(
+                        "Drag the clip's edges to trim · ${Formatters.timecode(clip.trimStartMs)}–${Formatters.timecode(clip.trimEndMs)}",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     ToolButton("Split", Icons.Outlined.ContentCut, onClick = onSplit)
@@ -128,16 +139,20 @@ fun ClipTools(
                     }
                 }
             }
-            ClipTab.COLOUR -> Column {
-                val c = clip.color
-                ValueSlider("Brightness", c.brightness, -1f..1f, onStart, { v -> onPreview { it.copy(color = it.color.copy(brightness = v)) } }, { onCommit { it.copy(color = it.color.copy(brightness = 0f)) } })
-                ValueSlider("Contrast", c.contrast, -1f..1f, onStart, { v -> onPreview { it.copy(color = it.color.copy(contrast = v)) } }, { onCommit { it.copy(color = it.color.copy(contrast = 0f)) } })
-                ValueSlider("Saturation", c.saturation, -1f..1f, onStart, { v -> onPreview { it.copy(color = it.color.copy(saturation = v)) } }, { onCommit { it.copy(color = it.color.copy(saturation = 0f)) } })
-                ValueSlider("Warmth", c.temperature, -1f..1f, onStart, { v -> onPreview { it.copy(color = it.color.copy(temperature = v)) } }, { onCommit { it.copy(color = it.color.copy(temperature = 0f)) } })
-            }
-            ClipTab.FILTER -> ChipRow {
-                VideoFilter.entries.forEach { f ->
-                    FilterChip(selected = clip.filter == f, onClick = { onCommit { it.copy(filter = f) } }, label = { Text(f.label) })
+            ClipTab.COLOUR -> ColourGradePanel(clip.color, onStart,
+                onPreview = { f -> onPreview { it.copy(color = f(it.color)) } },
+                onCommit = { f -> onCommit { it.copy(color = f(it.color)) } })
+            ClipTab.FILTER -> Column {
+                ChipRow {
+                    VideoFilter.entries.forEach { f ->
+                        FilterChip(selected = clip.filter == f, onClick = { onCommit { it.copy(filter = f) } }, label = { Text(f.label) })
+                    }
+                }
+                if (clip.filter != VideoFilter.NONE) {
+                    ValueSlider("${clip.filter.label} strength", clip.filterIntensity, 0f..1f, onStart,
+                        onChange = { v -> onPreview { it.copy(filterIntensity = v) } },
+                        onReset = { onCommit { it.copy(filterIntensity = 1f) } },
+                        format = { v -> "${(v * 100).roundToInt()}%" })
                 }
             }
         }
@@ -145,6 +160,45 @@ fun ClipTools(
 }
 
 private fun trim(f: Float) = if (f % 1f == 0f) f.toInt().toString() else f.toString()
+
+private enum class GradeGroup(val label: String) { LIGHT("Light"), COLOUR("Colour"), DETAIL("Detail") }
+
+/** Colour grading controls, grouped like the photo editor's (Light / Colour / Detail). */
+@Composable
+private fun ColourGradePanel(
+    c: VideoColor,
+    onStart: () -> Unit,
+    onPreview: ((VideoColor) -> VideoColor) -> Unit,
+    onCommit: ((VideoColor) -> VideoColor) -> Unit,
+) {
+    var group by rememberSaveable { mutableStateOf(GradeGroup.LIGHT) }
+    @Composable
+    fun slider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, set: (VideoColor, Float) -> VideoColor) =
+        ValueSlider(label, value, range, onStart, { v -> onPreview { set(it, v) } }, { onCommit { set(it, 0f) } },
+            format = { v -> "${(v * 100).roundToInt()}" })
+    Column {
+        ChipRow {
+            GradeGroup.entries.forEach { g -> FilterChip(selected = group == g, onClick = { group = g }, label = { Text(g.label) }) }
+            if (!c.isNeutral) TextButton(onClick = { onCommit { VideoColor() } }) { Text("Reset all") }
+        }
+        when (group) {
+            GradeGroup.LIGHT -> {
+                slider("Exposure", c.exposure, -1f..1f) { x, v -> x.copy(exposure = v) }
+                slider("Brightness", c.brightness, -1f..1f) { x, v -> x.copy(brightness = v) }
+                slider("Contrast", c.contrast, -1f..1f) { x, v -> x.copy(contrast = v) }
+                slider("Highlights", c.highlights, -1f..1f) { x, v -> x.copy(highlights = v) }
+                slider("Shadows", c.shadows, -1f..1f) { x, v -> x.copy(shadows = v) }
+            }
+            GradeGroup.COLOUR -> {
+                slider("Saturation", c.saturation, -1f..1f) { x, v -> x.copy(saturation = v) }
+                slider("Vibrance", c.vibrance, -1f..1f) { x, v -> x.copy(vibrance = v) }
+                slider("Warmth", c.temperature, -1f..1f) { x, v -> x.copy(temperature = v) }
+                slider("Tint", c.tint, -1f..1f) { x, v -> x.copy(tint = v) }
+            }
+            GradeGroup.DETAIL -> slider("Sharpness", c.sharpness, 0f..1f) { x, v -> x.copy(sharpness = v) }
+        }
+    }
+}
 
 @Composable
 private fun ToolButton(
@@ -257,7 +311,7 @@ fun ProjectTools(
 ) {
     Column {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
-            ToolButton("Add clip", Icons.Outlined.Add, onClick = onAddClip)
+            ToolButton("Add media", Icons.Outlined.Add, onClick = onAddClip)
             ToolButton("Text", Icons.Outlined.TextFields, onClick = onAddText)
             ToolButton(if (project.music == null) "Music" else "Change music", Icons.Outlined.LibraryMusic, onClick = onMusic)
         }
@@ -276,7 +330,7 @@ fun ProjectTools(
                 onClick = { onCommit { it.copy(fadeOut = if (it.fadeOut?.toWhite == true) null else Fade(1200, toWhite = true)) } },
                 label = { Text("Fade out to white") })
         }
-        Text("Tap a clip to edit it · tap the dot between clips for a transition · scroll the timeline to move the playhead",
+        Text("Tap a clip to edit it · long-press and drag a clip to reorder · tap the dot between clips for a transition · scroll the timeline to move the playhead",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
     }

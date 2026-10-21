@@ -84,6 +84,33 @@ object TestMedia {
         r.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
     }
 
+    /**
+     * Adds an extra photo for one test (not part of [seed], so gallery counts in other
+     * tests are unaffected; [cleanup] removes it). [exifOrientation] is an ExifInterface
+     * ORIENTATION_* value. PNG is used when [png] is true (lossless, for colour checks).
+     */
+    fun insertExtraPhoto(name: String, bmp: Bitmap, exifOrientation: Int = ExifInterface.ORIENTATION_NORMAL, png: Boolean = false): Uri {
+        val r = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, if (png) "image/png" else "image/jpeg")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, PHOTO_DIR)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = r.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)!!
+        r.openOutputStream(uri, "w")!!.use { bmp.compress(if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 95, it) }
+        if (!png && exifOrientation != ExifInterface.ORIENTATION_NORMAL) {
+            r.openFileDescriptor(uri, "rw")!!.use { pfd ->
+                ExifInterface(pfd.fileDescriptor).apply {
+                    setAttribute(ExifInterface.TAG_ORIENTATION, exifOrientation.toString())
+                    saveAttributes()
+                }
+            }
+        }
+        r.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+        return uri
+    }
+
     private fun insertVideo() {
         val r = context.contentResolver
         val values = ContentValues().apply {

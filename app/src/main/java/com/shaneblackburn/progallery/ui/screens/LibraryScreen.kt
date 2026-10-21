@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MotionPhotosOn
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.PhotoSizeSelectLarge
@@ -80,8 +81,12 @@ fun LibraryScreen(
     onOpenTrash: () -> Unit,
     onOpenHidden: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenProjects: () -> Unit,
     bottomPadding: PaddingValues,
 ) {
+    val projectStore = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.shaneblackburn.progallery.ProGalleryApp).projects
+    val projects by projectStore.projects.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(Unit) { projectStore.refresh() }
     val countsFlow = remember { vm.counts() }
     val counts by countsFlow.collectAsState(initial = emptyMap())
     val trash by vm.trash.collectAsState()
@@ -108,6 +113,13 @@ fun LibraryScreen(
         ) {
             items(visible, key = { it.name }) { c ->
                 CollectionTile(c.icon(), c.title, counts[c], onClick = { onOpen(c) })
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("Create", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 12.dp, start = 4.dp))
+            }
+            item(key = "projects") {
+                CollectionTile(Icons.Outlined.Movie, "Video projects", projects.size, onClick = onOpenProjects)
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text("Manage", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,

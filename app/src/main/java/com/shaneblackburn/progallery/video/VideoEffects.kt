@@ -16,7 +16,6 @@ import androidx.media3.effect.RgbMatrix
 import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.FadeCurve
 import com.shaneblackburn.progallery.core.video.TextAnimation
-import com.shaneblackburn.progallery.core.video.VideoColor
 import com.shaneblackburn.progallery.core.video.VideoFilter
 import com.shaneblackburn.progallery.core.video.VideoProject
 import java.nio.ByteBuffer
@@ -44,6 +43,14 @@ data class ColorXform(val m: FloatArray = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0
         o[0], o[1], o[2], 1f,
     )
 
+    /** Linear blend between identity (amount 0) and this transform (amount 1). */
+    fun blend(amount: Float): ColorXform {
+        val a = amount.coerceIn(0f, 1f)
+        if (a == 1f) return this
+        val id = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
+        return ColorXform(FloatArray(9) { id[it] + (m[it] - id[it]) * a }, FloatArray(3) { o[it] * a })
+    }
+
     override fun equals(other: Any?) = other is ColorXform && m.contentEquals(other.m) && o.contentEquals(other.o)
     override fun hashCode() = m.contentHashCode() * 31 + o.contentHashCode()
 
@@ -63,15 +70,6 @@ data class ColorXform(val m: FloatArray = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0
 
         /** Contrast around mid-grey: (x - 0.5) * c + 0.5. */
         fun contrast(c: Float) = ColorXform(floatArrayOf(c, 0f, 0f, 0f, c, 0f, 0f, 0f, c), floatArrayOf(0.5f * (1 - c), 0.5f * (1 - c), 0.5f * (1 - c)))
-
-        fun forColor(c: VideoColor): ColorXform {
-            var x = ColorXform()
-            if (c.temperature != 0f) x = x.then(gains(1f + 0.2f * c.temperature, 1f, 1f - 0.2f * c.temperature))
-            if (c.brightness != 0f) x = x.then(offset(c.brightness * 0.25f))
-            if (c.contrast != 0f) x = x.then(contrast(1f + c.contrast * 0.6f))
-            if (c.saturation != 0f) x = x.then(saturation(1f + c.saturation))
-            return x
-        }
 
         fun forFilter(f: VideoFilter): ColorXform = when (f) {
             VideoFilter.NONE -> ColorXform()
@@ -93,14 +91,17 @@ data class ColorXform(val m: FloatArray = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0
     }
 }
 
-/** Static colour/filter matrix for one clip. */
+/**
+ * Static filter look for one clip, blended with the original by the clip's filter
+ * strength. (The colour grade itself runs in [GradeEffect].)
+ */
 @OptIn(UnstableApi::class)
 class ClipColorMatrix(clip: Clip) : RgbMatrix {
-    private val matrix = ColorXform.forColor(clip.color).then(ColorXform.forFilter(clip.filter)).toGl()
+    private val matrix = ColorXform.forFilter(clip.filter).blend(clip.filterIntensity).toGl()
     override fun getMatrix(presentationTimeUs: Long, useHdr: Boolean): FloatArray = matrix
 
     companion object {
-        fun needed(clip: Clip) = !clip.color.isNeutral || clip.filter != VideoFilter.NONE
+        fun needed(clip: Clip) = clip.filter != VideoFilter.NONE && clip.filterIntensity > 0f
     }
 }
 

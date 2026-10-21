@@ -58,9 +58,12 @@ data class VideoProject(
         val loc = locate(timelineMs) ?: return this
         val clip = clips[loc.clipIndex]
         val cut = loc.sourceMs
-        if (cut - clip.trimStartMs < minPieceMs || clip.trimEndMs - cut < minPieceMs) return this
-        val first = clip.copy(trimEndMs = cut)
-        val second = clip.copy(id = clip.id * 31 + cut, trimStartMs = cut)
+        val minPiece = if (clip.isImage) max(minPieceMs, Clip.MIN_IMAGE_MS) else minPieceMs
+        if (cut - clip.trimStartMs < minPiece || clip.trimEndMs - cut < minPiece) return this
+        // A photo has no source offset: splitting gives two photos sharing the display time.
+        val first = if (clip.isImage) clip.withImageDuration(cut) else clip.copy(trimEndMs = cut)
+        val second = if (clip.isImage) clip.copy(id = clip.id * 31 + cut).withImageDuration(clip.trimEndMs - cut)
+        else clip.copy(id = clip.id * 31 + cut, trimStartMs = cut)
         val newClips = clips.toMutableList().apply { set(loc.clipIndex, first); add(loc.clipIndex + 1, second) }
         // A hard cut between the two halves; the old "after" transition moves to the second half.
         val slots = transitionSlots().apply { add(loc.clipIndex, Transition.NONE) }
@@ -85,6 +88,21 @@ data class VideoProject(
         list.add(to, c)
         // Transitions belong to positions, not clips; keep them as they are.
         return copy(clips = list)
+    }
+
+    /**
+     * Drag-to-reorder: the position clip [from] lands at after being dragged by [deltaMs]
+     * of timeline time — the number of other clips whose centre lies before its new centre.
+     */
+    fun dropIndex(from: Int, deltaMs: Float): Int {
+        if (from !in clips.indices) return from
+        val starts = clipStarts()
+        val centre = starts[from] + clips[from].timelineDurationMs / 2f + deltaMs
+        var target = 0
+        for (j in clips.indices) {
+            if (j != from && starts[j] + clips[j].timelineDurationMs / 2f < centre) target++
+        }
+        return target
     }
 
     fun updateClip(index: Int, change: (Clip) -> Clip): VideoProject =
@@ -126,6 +144,15 @@ data class Clip(
     val flipV: Boolean = false,
     val color: VideoColor = VideoColor(),
     val filter: VideoFilter = VideoFilter.NONE,
+    /** 0..1 strength of [filter]. */
+    val filterIntensity: Float = 1f,
+    /**
+     * A still photo shown for [trimmedSourceMs] (its "duration"). Photos have no audio,
+     * no speed change and no trimming; [sourceDurationMs] is simply the display time.
+     */
+    val isImage: Boolean = false,
+    /** MIME type of the source (needed to load photos), if known. */
+    val mimeType: String? = null,
 ) {
     val trimmedSourceMs: Long get() = max(0L, trimEndMs - trimStartMs)
 
@@ -133,6 +160,12 @@ data class Clip(
 
     fun sourceTimeAt(offsetInClipMs: Long): Long =
         (trimStartMs + offsetInClipMs * speed.toDouble()).roundToLong().coerceIn(trimStartMs, trimEndMs)
+
+    /** For photo clips: sets how long the photo is shown (0.5 s .. 60 s). */
+    fun withImageDuration(ms: Long): Clip {
+        val d = ms.coerceIn(MIN_IMAGE_MS, MAX_IMAGE_MS)
+        return copy(sourceDurationMs = d, trimStartMs = 0L, trimEndMs = d, speed = 1f)
+    }
 
     /** Clamps trims to the source and keeps at least [VideoProject.MIN_CLIP_MS]. */
     fun withTrim(start: Long, end: Long): Clip {
@@ -144,14 +177,32 @@ data class Clip(
     /** Output frame size after rotation metadata and user quarter turns. */
     val orientedWidth: Int get() = if ((sourceRotation / 90 + quarterTurns) % 2 == 1) height else width
     val orientedHeight: Int get() = if ((sourceRotation / 90 + quarterTurns) % 2 == 1) width else height
+
+    companion object {
+        const val DEFAULT_IMAGE_MS = 3000L
+        const val MIN_IMAGE_MS = 500L
+        const val MAX_IMAGE_MS = 60_000L
+    }
 }
 
-/** Colour adjustments for video (all -1..1, 0 = neutral). */
+/**
+ * Colour grade for a video clip. All values -1..1 with 0 = neutral, except
+ * [sharpness] which is 0..1. Applied on the GPU by the grading shader, identically in
+ * the live preview and the export.
+ */
 data class VideoColor(
     val brightness: Float = 0f,
     val contrast: Float = 0f,
     val saturation: Float = 0f,
     val temperature: Float = 0f,
+    /** In stops / 2 (so -1..1 = -2..+2 EV). */
+    val exposure: Float = 0f,
+    val highlights: Float = 0f,
+    val shadows: Float = 0f,
+    val vibrance: Float = 0f,
+    /** Green (-) to magenta (+). */
+    val tint: Float = 0f,
+    val sharpness: Float = 0f,
 ) {
     val isNeutral: Boolean get() = this == VideoColor()
 }

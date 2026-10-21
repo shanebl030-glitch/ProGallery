@@ -7,10 +7,10 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -82,18 +82,36 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
+/** How the video editor was opened. */
+sealed interface VideoOpen {
+    /** "Edit" on one video in the viewer. */
+    data class Item(val item: MediaItem) : VideoOpen
+    /** "New video" from picked gallery items. */
+    data class New(val items: List<MediaItem>) : VideoOpen
+    /** Resume a saved project. */
+    data class Project(val id: String) : VideoOpen
+}
+
+/**
+ * @param pickerItems gallery items offered by "Add media" (the timeline, newest first).
+ */
 @Composable
-fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit) {
+fun VideoEditorScreen(
+    open: VideoOpen,
+    pickerItems: List<MediaItem>,
+    onClose: () -> Unit,
+    onCreated: (projectId: String) -> Unit = {},
+) {
     ProGalleryTheme(mode = ThemeMode.DARK, dynamicColor = false) {
         Surface(color = Color(0xFF0E0E10), contentColor = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize()) {
-            VideoEditorContent(item, onClose)
+            VideoEditorContent(open, pickerItems, onClose, onCreated)
         }
     }
 }
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
+private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, onClose: () -> Unit, onCreated: (String) -> Unit) {
     val vm: VideoEditorViewModel = viewModel()
     val context = LocalContext.current
     val history by vm.history.collectAsState()
@@ -101,7 +119,12 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
     val error by vm.error.collectAsState()
     val thumbs by vm.thumbs.collectAsState()
     val exportState by vm.export.state.collectAsState()
+    val doc by vm.doc.collectAsState()
+    val persisted by vm.persisted.collectAsState()
+    val missing by vm.missing.collectAsState()
     val project = history.current
+    var showPicker by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
 
     var selection by remember { mutableStateOf<TimelineSelection?>(null) }
     var pxPerMs by remember { mutableFloatStateOf(0.06f) } // 60 px per second
@@ -114,7 +137,18 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
     var settings by remember { mutableStateOf(VideoExportSettings()) }
     val scroll = rememberScrollState()
 
-    LaunchedEffect(item.id) { vm.open(item) }
+    // A brand-new project has been written to storage: let the caller switch to its saved route.
+    LaunchedEffect(persisted, doc?.id, loading) {
+        val id = doc?.id
+        if (open is VideoOpen.New && persisted && !loading && id != null) onCreated(id)
+    }
+    LaunchedEffect(open) {
+        when (open) {
+            is VideoOpen.Item -> vm.open(open.item)
+            is VideoOpen.New -> vm.openNew(open.items)
+            is VideoOpen.Project -> vm.openProject(open.id)
+        }
+    }
     LaunchedEffect(error) { error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); vm.clearError() } }
 
     // ---- Preview player (same Composition as export; rebuilt on every change)
@@ -133,7 +167,10 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
         vm.history.map { it.current }
             .distinctUntilChanged()
             .debounce(350)
-            .collect { p -> if (p.clips.isNotEmpty()) preview.show(p, positionMs) }
+            .collect { p ->
+                // A missing source would make the whole preview fail; wait until it's resolved.
+                if (p.clips.isNotEmpty() && p.clips.none { it.uri in vm.missing.value }) preview.show(p, positionMs)
+            }
     }
     // Keep the timeline under the playhead while playing.
     LaunchedEffect(playing) {
@@ -154,14 +191,14 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
     }
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::addClip) }
     val pickMusic = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::setMusic) }
 
     BackHandler {
         when {
             exportState is ExportState.Running -> showExport = true
             selection != null -> selection = null // first Back closes the clip/title/music tools
-            history.canUndo -> confirmDiscard = true
+            // Kept projects are saved automatically; a quick edit of one video asks first.
+            !persisted && history.canUndo -> confirmDiscard = true
             else -> onClose()
         }
     }
@@ -169,12 +206,26 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         // Top bar
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (history.canUndo) confirmDiscard = true else onClose() }) { Icon(Icons.Filled.Close, "Close") }
-            Spacer(Modifier.weight(1f))
+            IconButton(onClick = { if (!persisted && history.canUndo) confirmDiscard = true else onClose() }) { Icon(Icons.Filled.Close, "Close") }
+            Column(Modifier.weight(1f).clickable(enabled = persisted) { renaming = true }.padding(horizontal = 4.dp)) {
+                Text(doc?.name ?: "", style = MaterialTheme.typography.titleSmall, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                if (persisted) Text("Saved automatically", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             IconButton(onClick = vm::undo, enabled = history.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo") }
             IconButton(onClick = vm::redo, enabled = history.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Redo") }
-            Spacer(Modifier.weight(1f))
             Button(onClick = { showExport = true }, enabled = !loading && project.clips.isNotEmpty()) { Text("Export") }
+        }
+
+        if (missing.isNotEmpty()) {
+            Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${missing.size} source file(s) can't be found (deleted, moved or access removed).",
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = vm::removeMissing) { Text("Remove them") }
+                }
+            }
         }
 
         // Preview
@@ -220,6 +271,10 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
             onSelect = { selection = it },
             onTrimStart = vm::beginChange,
             onTrim = { i, s, e -> vm.previewChange { p -> p.updateClip(i) { it.withTrim(s, e) } } },
+            onMove = { from, to ->
+                vm.commit { it.moveClip(from, to) }
+                selection = TimelineSelection.ClipSel(to)
+            },
             modifier = Modifier.padding(vertical = 6.dp),
         )
 
@@ -282,7 +337,7 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
                 }
                 null -> ProjectTools(
                     project = project,
-                    onAddClip = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                    onAddClip = { showPicker = true },
                     onAddText = {
                         val start = positionMs.coerceIn(0, maxOf(0, project.durationMs - 500))
                         textEdit = TimedText(0L, "", start, minOf(project.durationMs, start + 3000))
@@ -312,10 +367,34 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
     if (confirmDiscard) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
-            title = { Text("Discard video edits?") },
-            text = { Text("Your changes will be lost. The original video is never changed.") },
-            confirmButton = { TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Discard", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
+            title = { Text("Keep this video project?") },
+            text = { Text("Keep it in Library › Video projects to carry on later, or discard your changes. The original video is never changed.") },
+            confirmButton = { TextButton(onClick = { confirmDiscard = false; vm.keepProject(); onClose() }) { Text("Keep project") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") }
+                    TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Discard", color = MaterialTheme.colorScheme.error) }
+                }
+            },
+        )
+    }
+    if (showPicker) {
+        MediaPickerDialog(
+            items = pickerItems,
+            title = "Add photos & videos",
+            confirmLabel = "Add",
+            onDismiss = { showPicker = false },
+            onConfirm = { picked -> showPicker = false; vm.addMedia(picked) },
+        )
+    }
+    if (renaming) {
+        var name by remember { mutableStateOf(doc?.name.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { renaming = false },
+            title = { Text("Rename project") },
+            text = { androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = { TextButton(onClick = { vm.rename(name); renaming = false }, enabled = name.isNotBlank()) { Text("Rename") } },
+            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
         )
     }
     if (showExport) {

@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.ChannelMixingAudioProcessor
 import androidx.media3.common.audio.ChannelMixingMatrix
@@ -21,6 +22,7 @@ import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
 import com.google.common.collect.ImmutableList
 import com.shaneblackburn.progallery.core.video.Clip
+import com.shaneblackburn.progallery.core.video.VideoGrade
 import com.shaneblackburn.progallery.core.video.VideoProject
 import kotlin.math.roundToInt
 
@@ -107,7 +109,45 @@ object ProjectComposer {
             .build()
     }
 
-    private fun editedItem(clip: Clip, outW: Int, outH: Int, settings: VideoExportSettings): EditedMediaItem {
+    private fun editedItem(clip: Clip, outW: Int, outH: Int, settings: VideoExportSettings): EditedMediaItem =
+        if (clip.isImage) imageItem(clip, outW, outH) else videoItem(clip, outW, outH)
+
+    /** Colour effects shared by photo and video clips (grade, then filter look). */
+    private fun colorEffects(clip: Clip): List<Effect> = buildList {
+        val grade = VideoGrade.from(clip.color)
+        if (!grade.isIdentity) add(GradeEffect(grade))
+        if (ClipColorMatrix.needed(clip)) add(ClipColorMatrix(clip))
+    }
+
+    private fun geometryEffect(clip: Clip): Effect? =
+        if (clip.quarterTurns == 0 && !clip.flipH && !clip.flipV) null
+        else ScaleAndRotateTransformation.Builder()
+            .setScale(if (clip.flipH) -1f else 1f, if (clip.flipV) -1f else 1f)
+            // Media3 rotates counter-clockwise for positive degrees.
+            .setRotationDegrees(-90f * clip.quarterTurns)
+            .build()
+
+    /** A still photo shown for the clip's duration (Media3 decodes it and applies EXIF rotation). */
+    private fun imageItem(clip: Clip, outW: Int, outH: Int): EditedMediaItem {
+        val durationMs = clip.timelineDurationMs
+        val mediaItem = MediaItem.Builder()
+            .setUri(Uri.parse(clip.uri))
+            .setMimeType(clip.mimeType ?: MimeTypes.IMAGE_JPEG)
+            .setImageDurationMs(durationMs)
+            .build()
+        val video = buildList<Effect> {
+            geometryEffect(clip)?.let(::add)
+            addAll(colorEffects(clip))
+            add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
+        }
+        return EditedMediaItem.Builder(mediaItem)
+            .setDurationUs(durationMs * 1000)
+            .setFrameRate(IMAGE_FPS)
+            .setEffects(Effects(emptyList(), video))
+            .build()
+    }
+
+    private fun videoItem(clip: Clip, outW: Int, outH: Int): EditedMediaItem {
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.parse(clip.uri))
             .setClippingConfiguration(
@@ -120,16 +160,8 @@ object ProjectComposer {
 
         val video = buildList<Effect> {
             if (clip.speed != 1f) add(SpeedChangeEffect(clip.speed))
-            if (clip.quarterTurns != 0 || clip.flipH || clip.flipV) {
-                add(
-                    ScaleAndRotateTransformation.Builder()
-                        .setScale(if (clip.flipH) -1f else 1f, if (clip.flipV) -1f else 1f)
-                        // Media3 rotates counter-clockwise for positive degrees.
-                        .setRotationDegrees(-90f * clip.quarterTurns)
-                        .build(),
-                )
-            }
-            if (ClipColorMatrix.needed(clip)) add(ClipColorMatrix(clip))
+            geometryEffect(clip)?.let(::add)
+            addAll(colorEffects(clip))
             // Every clip is fitted to the same output frame (letterboxed if needed).
             add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
         }
@@ -151,6 +183,9 @@ object ProjectComposer {
     private fun volumeProcessor(gain: Float): AudioProcessor = ChannelMixingAudioProcessor().apply {
         for (ch in 1..8) putChannelMixingMatrix(ChannelMixingMatrix.create(ch, ch).scaleBy(gain))
     }
+
+    /** Frame rate photos are rendered at (matches typical phone video). */
+    const val IMAGE_FPS = 30
 
     /** Suggested video bitrate for a frame size, frame rate and quality. */
     fun bitrate(w: Int, h: Int, fps: Int, quality: ExportQuality, codec: ExportCodec): Int {
