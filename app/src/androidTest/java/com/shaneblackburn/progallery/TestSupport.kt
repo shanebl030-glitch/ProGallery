@@ -162,6 +162,18 @@ object Shots {
         return bmp
     }
 
+    /** Mean R, G, B of a horizontal band. */
+    fun brightnessRgb(bmp: Bitmap, top: Float, bottom: Float): DoubleArray {
+        val sum = DoubleArray(3); var n = 0
+        for (y in (bmp.height * top).toInt() until (bmp.height * bottom).toInt() step 4) {
+            for (x in 0 until bmp.width step 4) {
+                val p = bmp.getPixel(x, y)
+                sum[0] += (p shr 16) and 255; sum[1] += (p shr 8) and 255; sum[2] += p and 255; n++
+            }
+        }
+        return DoubleArray(3) { if (n == 0) 0.0 else Math.round(sum[it] / n * 10) / 10.0 }
+    }
+
     /** Mean brightness (0..255) of a horizontal band of a screenshot, as fractions of height. */
     fun brightness(bmp: Bitmap, top: Float, bottom: Float): Double {
         var sum = 0L; var n = 0
@@ -184,6 +196,17 @@ object Shots {
     }
 }
 
+/** Writes the app's thread stacks to the screenshots folder (diagnostics). */
+fun dumpThreads(name: String) {
+    val text = Thread.getAllStackTraces().entries.joinToString("\n\n") { (t, st) ->
+        "THREAD ${t.name} (${t.state})\n  " + st.take(30).joinToString("\n  ")
+    }
+    TestMedia.context.getExternalFilesDir("screenshots")?.let { d ->
+        d.mkdirs(); File(d, "$name.txt").writeText(text)
+    }
+    Log.i("ThreadDump", "$name\n" + text.take(20_000))
+}
+
 /** UI Automator helpers: wait for and act on on-screen text / content descriptions. */
 class Ui {
     val device: UiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
@@ -197,7 +220,13 @@ class Ui {
         val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)!!
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         ctx.startActivity(intent)
-        check(device.wait(Until.hasObject(By.pkg(ctx.packageName)), 20_000)) { "App didn't start" }
+        if (!device.wait(Until.hasObject(By.pkg(ctx.packageName)), 20_000)) {
+            // The CI emulator is occasionally overloaded (System UI ANR dialogs); retry once.
+            device.findObject(By.text("Wait"))?.click()
+            device.pressHome()
+            ctx.startActivity(intent)
+            check(device.wait(Until.hasObject(By.pkg(ctx.packageName)), 30_000)) { "App didn't start" }
+        }
     }
 
     fun obj(sel: BySelector, timeoutMs: Long = 15_000): UiObject2 =

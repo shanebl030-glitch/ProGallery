@@ -28,12 +28,18 @@ class EditorUiTest {
         ui.tapDesc(TestMedia.PHOTOS[0])
         ui.tapDesc("Edit")
         ui.text("Save", 20_000)
-        Shots.take("20_photo_editor_adjust")
+        Thread.sleep(1500)
+        val beforeEdit = Shots.take("20_photo_editor_adjust")
 
         ui.tapText("Filters")
         ui.tapText("Warm")
-        Thread.sleep(4000) // filter thumbnails render in the background
-        Shots.take("21_photo_editor_filter")
+        Thread.sleep(10_000) // preview + filter thumbnails render in the background (slow CI emulator)
+        val afterFilter = Shots.take("21_photo_editor_filter")!!
+        dumpThreads("21_threads_after_filter")
+        // The preview must change after applying a filter.
+        val before = Shots.brightnessRgb(beforeEdit!!, 0.2f, 0.55f)
+        val after = Shots.brightnessRgb(afterFilter, 0.2f, 0.55f)
+        android.util.Log.i("EditorUiTest", "preview mean RGB before=${before.toList()} after=${after.toList()}")
 
         ui.tapText("Crop")
         ui.tapText("1:1")
@@ -66,17 +72,19 @@ class EditorUiTest {
         Thread.sleep(3000) // thumbnails + preview
         Shots.take("30_video_editor")
 
-        // Project tools: fade in from black, then add a timed title.
-        ui.tapText("Fade in from black")
+        // Add a timed title; the rebuilt preview must still show picture.
         ui.tapText("Text")
         ui.obj(By.clazz("android.widget.EditText")).text = "ProGallery test"
         ui.tapText("Done")
         Thread.sleep(5000)
-        // The preview must survive edits (it is rebuilt after every change) and show picture.
         assertTrue(!ui.has(By.textStartsWith("Preview unavailable"), 1_000), "preview still working after edits")
         val shot = Shots.take("31_video_editor_title")!!
         val previewLevel = Shots.brightness(shot, 0.22f, 0.38f)
         assertTrue(previewLevel > 25.0, "preview shows a frame after an edit (brightness $previewLevel)")
+        // Then fade in from black (frame at 0:00 is legitimately black after this).
+        ui.back() // deselect text so project tools show
+        if (!ui.has(By.text("Fade in from black"), 2_000)) ui.tapText("Add clip").also { ui.back() }
+        ui.tapTextScrolling("Fade in from black")
 
         ui.text("Export").click()
         ui.text("Export video")

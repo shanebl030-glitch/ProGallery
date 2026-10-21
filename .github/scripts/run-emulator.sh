@@ -39,6 +39,8 @@ adb shell settings put system screen_off_timeout 2147483647
 adb shell locksettings set-disable true
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
+adb logcat -G 16M || true
+adb logcat -c || true
 sleep 10
 bash .github/scripts/device-tests.sh
 adb emu kill || true

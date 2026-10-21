@@ -132,8 +132,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private fun requestRender(immediate: Boolean = false) {
         val src = previewSource ?: return
         renderJob?.cancel()
+        val requested = System.nanoTime()
         renderJob = viewModelScope.launch(Dispatchers.Default) {
             if (!immediate) delay(16) // coalesce rapid slider events into ~60 fps
+            val started = System.nanoTime()
+            Log.d(TAG, "render start (queued ${(started - requested) / 1_000_000} ms, cropMode=$cropMode)")
             _rendering.value = true
             try {
                 if (cropMode) {
@@ -149,8 +152,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 val out = EditRenderer.render(src, s, isCancelled = { !ctx.isActiveSafe() })
                 ctx.ensureActive()
                 _preview.value = out.asImageBitmap()
+                Log.d(TAG, "render done in ${(System.nanoTime() - started) / 1_000_000} ms (${out.width}x${out.height})")
             } catch (e: java.util.concurrent.CancellationException) {
-                // superseded by a newer render
+                Log.d(TAG, "render superseded after ${(System.nanoTime() - started) / 1_000_000} ms")
             } catch (e: OutOfMemoryError) {
                 Log.e(TAG, "preview OOM", e)
             } finally {

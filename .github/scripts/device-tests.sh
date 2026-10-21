@@ -22,6 +22,6 @@ adb exec-out screencap -p > "$OUT/screenshots/60_launcher_home.png"
 W=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | cut -dx -f1); H=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | cut -dx -f2)
 adb shell input swipe $((W/2)) $((H*85/100)) $((W/2)) $((H*20/100)) 400; sleep 3
 adb exec-out screencap -p > "$OUT/screenshots/61_launcher_drawer.png"
-adb logcat -d -t 3000 > "$OUT/logcat.txt" 2>/dev/null
+adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
 ls "$OUT/screenshots" | head -50
 exit 0
