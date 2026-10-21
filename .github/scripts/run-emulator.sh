@@ -21,7 +21,7 @@ echo no | "$AVDM" create avd -n pgtest -k "$IMG" -d pixel_6 --force > "$OUT/avd.
   || echo no | "$AVDM" create avd -n pgtest -k "$IMG" --force >> "$OUT/avd.log" 2>&1
 { echo "--- emulator -list-avds"; emulator -list-avds; echo "--- avd dir"; ls -la "$ANDROID_AVD_HOME"; } >> "$OUT/avd.log" 2>&1
 emulator -avd pgtest -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot \
-  -camera-back none -camera-front none -memory 4096 -partition-size 6000 > "$OUT/emulator.log" 2>&1 &
+  -camera-back none -camera-front none -memory 3072 -partition-size 2048 > "$OUT/emulator.log" 2>&1 &
 timeout 600 adb wait-for-device || { echo "device never appeared" > "$OUT/boot.txt"; echo missing > "$OUT/exit_code"; exit 0; }
 booted=0
 for i in $(seq 1 240); do
