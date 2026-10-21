@@ -282,17 +282,30 @@ class Ui {
 
     fun tapText(t: String) = text(t).click()
 
-    /** Taps [t], scrolling horizontal lists to the right to reveal it if needed (like a user would). */
+    /**
+     * Taps [t], revealing it first if it's off-screen in a horizontal row. Uses raw swipe
+     * gestures (UiObject2.scroll is unreliable on Compose rows), trying each horizontal
+     * scrollable in both directions.
+     */
     fun tapTextScrolling(t: String) {
         if (has(By.text(t), 2_000)) { text(t).click(); return }
-        for (dir in listOf(androidx.test.uiautomator.Direction.RIGHT, androidx.test.uiautomator.Direction.LEFT)) {
-            for (list in device.findObjects(By.scrollable(true))) {
-                repeat(8) {
-                    runCatching { list.scroll(dir, 0.75f) }
-                    device.waitForIdle()
-                    if (has(By.text(t), 800)) { text(t).click(); return }
+        repeat(2) {
+            // Horizontal scrollables only (wider than tall); swipe along their mid-line.
+            val rows = device.findObjects(By.scrollable(true)).filter { it.visibleBounds.width() > it.visibleBounds.height() }
+            for (row in rows) {
+                val b = row.visibleBounds
+                val y = b.centerY()
+                for (dir in listOf(1, -1)) { // left to reveal right-side items, then right
+                    repeat(6) {
+                        val fromX = if (dir == 1) (b.right - b.width() / 6) else (b.left + b.width() / 6)
+                        val toX = if (dir == 1) (b.left + b.width() / 6) else (b.right - b.width() / 6)
+                        device.swipe(fromX, y, toX, y, 24)
+                        device.waitForIdle()
+                        if (has(By.text(t), 600)) { text(t).click(); return }
+                    }
                 }
             }
+            if (has(By.text(t), 600)) { text(t).click(); return }
         }
         error("Not found even after scrolling: $t")
     }
