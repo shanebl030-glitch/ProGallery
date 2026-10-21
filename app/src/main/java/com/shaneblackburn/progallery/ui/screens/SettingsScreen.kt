@@ -76,7 +76,7 @@ fun SettingsScreen(
             )
         },
     ) { inner ->
-        LazyColumn(contentPadding = PaddingValues(top = inner.calculateTopPadding(), bottom = 32.dp)) {
+        LazyColumn(contentPadding = PaddingValues(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding() + 32.dp)) {
             item { Section("Appearance") }
             item {
                 ListItem(

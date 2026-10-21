@@ -88,7 +88,12 @@ class GalleryUiTest {
         ui.desc("Details")
         Shots.take("08_viewer_photo")
         ui.tapDesc("Details")
-        ui.text("Camera")              // EXIF section from the seeded Make/Model
+        // EXIF section from the seeded Make/Model; the sheet opens half-way, so drag it up if needed.
+        for (i in 0 until 3) {
+            if (ui.has(By.text("ProGalleryTest Emulator Cam"), 1_500)) break
+            ui.device.swipe(ui.device.displayWidth / 2, ui.device.displayHeight * 4 / 5, ui.device.displayWidth / 2, ui.device.displayHeight / 3, 30)
+        }
+        ui.text("Camera")
         ui.text("ProGalleryTest Emulator Cam")
         Shots.take("09_viewer_details")
         ui.back()                      // close sheet

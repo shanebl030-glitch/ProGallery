@@ -39,6 +39,9 @@ Personal-use build. Everything from 0.1.0 is unchanged.
   small icons).
 
 ### Fixed
+- Settings and User guide: the last items (including the version/credit footer) were
+  hidden behind the navigation bar on phones using 3-button navigation. Found by the
+  emulator tests.
 - Video editor build error (overlay list type in `ProjectComposer`).
 - Video editor live preview: clip and music durations are now supplied, which
   CompositionPlayer requires, and a fresh preview player is created after every edit

@@ -93,7 +93,7 @@ fun GuideScreen(onBack: () -> Unit) {
             )
         },
     ) { inner ->
-        LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = inner.calculateTopPadding(), bottom = 32.dp)) {
+        LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding() + 32.dp)) {
             GUIDE.forEach { (title, lines) ->
                 item(key = title) {
                     Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
