@@ -86,6 +86,8 @@ object ProjectComposer {
                 )
                 .build()
             val musicItem = EditedMediaItem.Builder(mediaItem)
+                // CompositionPlayer (preview) requires the media's full duration.
+                .setDurationUs(music.durationMs * 1000)
                 .setRemoveVideo(true)
                 .setEffects(Effects(listOf<AudioProcessor>(GainEnvelopeProcessor(music.volume, music.fadeInMs, music.fadeOutMs, total)), emptyList()))
                 .build()
@@ -139,6 +141,8 @@ object ProjectComposer {
         }
 
         return EditedMediaItem.Builder(mediaItem)
+            // Full source duration (before clipping); required by CompositionPlayer for preview.
+            .setDurationUs(clip.sourceDurationMs * 1000)
             .setEffects(Effects(audio, video))
             .build()
     }

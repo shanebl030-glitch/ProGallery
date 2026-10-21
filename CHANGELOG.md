@@ -38,6 +38,8 @@ Personal-use build. Everything from 0.1.0 is unchanged.
 
 ### Fixed
 - Video editor build error (overlay list type in `ProjectComposer`).
+- Video editor live preview: clip and music durations are now supplied, which
+  CompositionPlayer requires (found by the emulator test; preview previously failed).
 - Video titles now update every frame (double-buffered overlay); previously the first
   frame's title state would have stuck for the whole video.
 

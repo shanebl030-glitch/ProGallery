@@ -33,7 +33,12 @@ if [ "$booted" != "1" ]; then echo "missing" > "$OUT/exit_code"; exit 0; fi
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
-adb shell input keyevent 82   # dismiss keyguard
+# Keep the screen on and unlocked for the whole run (UI tests can't see a dark/locked screen).
+adb shell svc power stayon true
+adb shell settings put system screen_off_timeout 2147483647
+adb shell locksettings set-disable true
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard
 sleep 10
 bash .github/scripts/device-tests.sh
 adb emu kill || true

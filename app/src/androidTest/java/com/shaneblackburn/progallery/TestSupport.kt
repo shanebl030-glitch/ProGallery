@@ -170,11 +170,15 @@ class Ui {
     val device: UiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
     fun launch() {
+        // The screen may have turned off during earlier (non-UI) tests.
+        device.wakeUp()
+        device.executeShellCommand("wm dismiss-keyguard")
+        device.pressHome()
         val ctx = TestMedia.context
         val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)!!
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         ctx.startActivity(intent)
-        check(device.wait(Until.hasObject(By.pkg(ctx.packageName).depth(0)), 15_000)) { "App didn't start" }
+        check(device.wait(Until.hasObject(By.pkg(ctx.packageName)), 20_000)) { "App didn't start" }
     }
 
     fun obj(sel: BySelector, timeoutMs: Long = 15_000): UiObject2 =
