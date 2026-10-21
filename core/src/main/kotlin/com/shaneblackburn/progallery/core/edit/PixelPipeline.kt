@@ -21,7 +21,15 @@ import kotlin.math.sqrt
  * Images are processed in horizontal strips (with overlap for neighbourhood ops),
  * which bounds memory for very large photos and lets rows run in parallel.
  */
-class PixelPipeline(state: EditState, private val shortSide: Int) {
+class PixelPipeline(
+    state: EditState,
+    private val shortSide: Int,
+    /**
+     * Spread rows over the shared ForkJoin pool. Pass false for small images (filter
+     * thumbnails) so they don't compete with the full-size preview for the pool's few threads.
+     */
+    private val parallel: Boolean = true,
+) {
 
     private val adj: Adjustments = Looks.combine(state.adjust, state.filter, state.filterIntensity)
     private val look: LookSpec = Looks.spec(state.filter)
@@ -119,6 +127,8 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
         return out
     }
 
+    private inline fun forRows(n: Int, crossinline block: (Int) -> Unit) = parallelRows(n, parallel, block)
+
     // ---------------------------------------------------------------- strip processing
 
     /**
@@ -134,12 +144,13 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
         val r = FloatArray(buf.size)
         val g = FloatArray(buf.size)
         val b = FloatArray(buf.size)
-        parallelRows(rows) { y ->
+        forRows(rows) { y ->
             val base = y * width
+            val px = FloatArray(3) // per-row scratch (a per-pixel ThreadLocal lookup is slow on ART)
             for (x in 0 until width) {
                 val i = base + x
                 val p = buf[i]
-                val px = pointOps((p shr 16) and 0xFF, (p shr 8) and 0xFF, p and 0xFF)
+                pointOps((p shr 16) and 0xFF, (p shr 8) and 0xFF, p and 0xFF, px)
                 r[i] = px[0]; g[i] = px[1]; b[i] = px[2]
             }
         }
@@ -150,7 +161,7 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
         if (adj.sharpness > 0f) localContrast(r, g, b, width, rows, sharpenRadius, adj.sharpness * 1.4f, midtoneWeighted = false)
         if (adj.blur > 0f) {
             for (plane in arrayOf(r, g, b)) {
-                repeat(3) { boxBlur(plane, width, rows, blurRadius) }
+                repeat(3) { boxBlur(plane, width, rows, blurRadius, parallel) }
             }
         }
 
@@ -162,7 +173,7 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
         val maxD = sqrt(cx * cx + cy * cy).coerceAtLeast(1f)
         val vig = adj.vignette
         val grain = adj.grain
-        parallelRows(outRows) { oy ->
+        forRows(outRows) { oy ->
             val y = oy + padTop
             val imageY = stripTopY + y
             for (x in 0 until width) {
@@ -192,11 +203,8 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
         return out
     }
 
-    private val tmp = ThreadLocal.withInitial { FloatArray(3) }
-
-    /** All per-pixel colour and tone operations. Returns a thread-local float[3] (0..1). */
-    internal fun pointOps(ri: Int, gi: Int, bi: Int): FloatArray {
-        val o = tmp.get()
+    /** All per-pixel colour and tone operations. Writes r, g, b (0..1) into [o] and returns it. */
+    internal fun pointOps(ri: Int, gi: Int, bi: Int, o: FloatArray = FloatArray(3)): FloatArray {
         var r: Float
         var g: Float
         var b: Float
@@ -220,8 +228,8 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
             r = l + (r - l) * f; g = l + (g - l) * f; b = l + (b - l) * f
         }
         if (!hsl.isNeutral) {
-            val res = applyHsl(r.coerceIn(0f, 1f), g.coerceIn(0f, 1f), b.coerceIn(0f, 1f))
-            r = res[0]; g = res[1]; b = res[2]
+            applyHsl(r.coerceIn(0f, 1f), g.coerceIn(0f, 1f), b.coerceIn(0f, 1f), o)
+            r = o[0]; g = o[1]; b = o[2]
         }
         val m = matrix
         if (m != null && intensity > 0f) {
@@ -260,10 +268,8 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
 
     // ---------------------------------------------------------------- HSL
 
-    private val hslTmp = ThreadLocal.withInitial { FloatArray(3) }
-
-    private fun applyHsl(r: Float, g: Float, b: Float): FloatArray {
-        val out = hslTmp.get()
+    /** Writes the HSL-adjusted colour into [out] (inputs are passed by value, so [out] may be reused). */
+    private fun applyHsl(r: Float, g: Float, b: Float, out: FloatArray): FloatArray {
         val mx = max(r, max(g, b))
         val mn = min(r, min(g, b))
         val d = mx - mn
@@ -311,10 +317,10 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
         r: FloatArray, g: FloatArray, b: FloatArray, w: Int, h: Int, radius: Int, amount: Float, midtoneWeighted: Boolean,
     ) {
         val lum = FloatArray(r.size)
-        parallelRows(h) { y -> for (x in 0 until w) { val i = y * w + x; lum[i] = 0.2126f * r[i] + 0.7152f * g[i] + 0.0722f * b[i] } }
+        forRows(h) { y -> for (x in 0 until w) { val i = y * w + x; lum[i] = 0.2126f * r[i] + 0.7152f * g[i] + 0.0722f * b[i] } }
         val blurred = lum.copyOf()
-        repeat(if (midtoneWeighted) 2 else 1) { boxBlur(blurred, w, h, radius) }
-        parallelRows(h) { y ->
+        repeat(if (midtoneWeighted) 2 else 1) { boxBlur(blurred, w, h, radius, parallel) }
+        forRows(h) { y ->
             for (x in 0 until w) {
                 val i = y * w + x
                 var d = (lum[i] - blurred[i]) * amount
@@ -331,9 +337,9 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
     private fun denoise(r: FloatArray, g: FloatArray, b: FloatArray, w: Int, h: Int) {
         val amount = adj.noiseReduction
         val br = r.copyOf(); val bg = g.copyOf(); val bb = b.copyOf()
-        for (p in arrayOf(br, bg, bb)) repeat(2) { boxBlur(p, w, h, denoiseRadius) }
+        for (p in arrayOf(br, bg, bb)) repeat(2) { boxBlur(p, w, h, denoiseRadius, parallel) }
         val threshold = 0.04f + 0.12f * amount
-        parallelRows(h) { y ->
+        forRows(h) { y ->
             for (x in 0 until w) {
                 val i = y * w + x
                 val diff = kotlin.math.abs(r[i] - br[i]) + kotlin.math.abs(g[i] - bg[i]) + kotlin.math.abs(b[i] - bb[i])
@@ -454,13 +460,13 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
          * accumulates rounding error that depends on where the window started, which
          * would make strip-rendered output differ (by 1 level) from whole-image output.
          */
-        fun boxBlur(p: FloatArray, w: Int, h: Int, radius: Int) {
+        fun boxBlur(p: FloatArray, w: Int, h: Int, radius: Int, parallel: Boolean = true) {
             if (radius <= 0 || w == 0 || h == 0) return
             val q = IntArray(p.size)
-            parallelRows(h) { y -> val base = y * w; for (x in 0 until w) q[base + x] = Math.round(p[base + x] * FIXED_ONE) }
+            parallelRows(h, parallel) { y -> val base = y * w; for (x in 0 until w) q[base + x] = Math.round(p[base + x] * FIXED_ONE) }
             val tmp = IntArray(p.size)
             // Horizontal
-            parallelRows(h) { y ->
+            parallelRows(h, parallel) { y ->
                 val base = y * w
                 val r = min(radius, w - 1)
                 val n = 2L * r + 1
@@ -472,7 +478,7 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
                 }
             }
             // Vertical
-            parallelRows(w) { x ->
+            parallelRows(w, parallel) { x ->
                 val r = min(radius, h - 1)
                 val n = 2L * r + 1
                 var sum = 0L
@@ -485,8 +491,8 @@ class PixelPipeline(state: EditState, private val shortSide: Int) {
         }
 
         /** Runs [block] for 0 until n, in parallel for large n. */
-        inline fun parallelRows(n: Int, crossinline block: (Int) -> Unit) {
-            if (n < 32) for (i in 0 until n) block(i)
+        inline fun parallelRows(n: Int, parallel: Boolean = true, crossinline block: (Int) -> Unit) {
+            if (!parallel || n < 32) for (i in 0 until n) block(i)
             else IntStream.range(0, n).parallel().forEach { block(it) }
         }
     }

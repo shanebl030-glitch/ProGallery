@@ -151,6 +151,21 @@ class EditTest {
         }
     }
 
+    @Test fun serialRenderMatchesParallel() {
+        // Filter thumbnails render single-threaded; the result must be identical to the parallel path.
+        val w = 96; val h = 72
+        val img = testImage(w, h)
+        val state = EditState(
+            adjust = Adjustments(exposure = 0.2f, clarity = 0.5f, sharpness = 0.4f, noiseReduction = 0.3f,
+                blur = 0.1f, vignette = 0.4f, grain = 0.2f),
+            filter = FilterLook.WARM,
+            hsl = HslAdjust().with(HueBand.BLUE, HslValue(hue = 0.3f, saturation = -0.5f, luminance = 0.2f)),
+        )
+        val par = PixelPipeline(state, minOf(w, h)).renderFull(img, w, h)
+        val ser = PixelPipeline(state, minOf(w, h), parallel = false).renderFull(img, w, h)
+        assertContentEquals(par, ser)
+    }
+
     @Test fun renderCanBeCancelled() {
         val img = testImage(64, 64)
         val p = PixelPipeline(EditState(adjust = Adjustments(exposure = 0.3f)), 64)

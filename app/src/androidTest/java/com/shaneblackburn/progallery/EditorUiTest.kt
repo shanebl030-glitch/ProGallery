@@ -33,13 +33,20 @@ class EditorUiTest {
 
         ui.tapText("Filters")
         ui.tapText("Warm")
-        Thread.sleep(10_000) // preview + filter thumbnails render in the background (slow CI emulator)
-        val afterFilter = Shots.take("21_photo_editor_filter")!!
-        dumpThreads("21_threads_after_filter")
-        // The preview must change after applying a filter.
+        // The preview must visibly warm up (red up / blue down) once the background render lands.
         val before = Shots.brightnessRgb(beforeEdit!!, 0.2f, 0.55f)
-        val after = Shots.brightnessRgb(afterFilter, 0.2f, 0.55f)
-        android.util.Log.i("EditorUiTest", "preview mean RGB before=${before.toList()} after=${after.toList()}")
+        var after = before
+        var warmShift = 0.0
+        val deadline = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < deadline) {
+            Thread.sleep(2000)
+            after = Shots.brightnessRgb(Shots.take("21_photo_editor_filter")!!, 0.2f, 0.55f)
+            warmShift = (after[0] - before[0]) - (after[2] - before[2])
+            if (warmShift > 4.0) break
+        }
+        android.util.Log.i("EditorUiTest", "preview mean RGB before=${before.toList()} after=${after.toList()} warmShift=$warmShift")
+        if (warmShift <= 4.0) dumpThreads("21_threads_after_filter")
+        assertTrue(warmShift > 4.0, "preview updates after Warm filter (R-B shift $warmShift)")
 
         ui.tapText("Crop")
         ui.tapText("1:1")

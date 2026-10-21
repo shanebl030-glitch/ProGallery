@@ -17,7 +17,7 @@ object FilterThumbnails {
         small.getPixels(px, 0, w, 0, 0, w, h)
         if (small !== src) small.recycle()
         return FilterLook.entries.associateWith { look ->
-            val out = PixelPipeline(EditState(filter = look), minOf(w, h)).renderFull(px, w, h)
+            val out = PixelPipeline(EditState(filter = look), minOf(w, h), parallel = false).renderFull(px, w, h)
             Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
         }
     }
