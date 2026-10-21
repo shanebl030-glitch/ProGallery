@@ -11,13 +11,13 @@ The development workspace cannot reach Google's Android repositories, so:
   logcat and test reports are published to the `ci-results` branch for review.
 - The emulator is not a phone: real hardware still needs checking (see the list below).
 
-## v0.3.0 results (CI run __RUN__, commit __COMMIT__)
+## v0.3.0 results (CI run 39573816367, commit 0492424)
 
 | Check | Result |
 |---|---|
 | Core unit tests | ✅ 61 pass |
 | App unit tests, debug + release build, lint | ✅ |
-| Device tests on the emulator (debug build) | __DEVICE__ |
+| Device tests on the emulator (debug build) | ✅ 24 / 24 pass |
 | Release (minified) APK smoke test | ✅ pass |
 
 ### Verified on the emulator (new in v0.3.0)
