@@ -2,6 +2,39 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.3.1] — 2026-10-22 — preview decoding fix + split/cut tools
+
+Focused fix release before milestone 2. Everything from 0.3.0 is kept.
+
+### Fixed
+- **Video preview failed with ERROR_CODE_DECODING_FAILED on real phones** (seen on a
+  Samsung portrait recording). Phones commonly record HDR10+ / 10-bit HEVC, which Media3's
+  editing pipeline (used by the live preview and export) can't consume in its default
+  HDR-keeping mode. The composition now tone-maps HDR and 10-bit down to SDR with OpenGL
+  (supported from Android 10), which both the preview and the export use — so what you see
+  matches what you get. This is the root-cause fix; it can only be fully confirmed on an
+  affected phone (the CI emulator has no HDR decoder).
+
+### Added
+- **Resilient preview:** if a device still can't decode a clip through the effects
+  pipeline, the preview automatically falls back to plain playback of the footage (which
+  decodes HDR natively) with a banner — "Simplified preview — colour, speed and effects
+  apply on export" — instead of a dead preview. Play, pause and seek keep working.
+- **Preview diagnostics:** decode failures now name the video's format (codec, resolution,
+  frame rate, bit depth, HDR) in the message and the log, to pinpoint problem media.
+- **Split at the playhead** button in the transport bar — always available, whatever is
+  selected. Splits the clip under the playhead and selects the new right-hand piece, so
+  you can split at the start and end of an unwanted section and delete the middle (the gap
+  closes automatically). Splitting preserves audio/video sync and never creates a
+  zero-length clip.
+
+### Testing
+- 64 core tests (added split-at-playhead source-time accuracy, cut-the-middle-section,
+  trim-after-split independence, and speed-aware split).
+- Device tests: split → delete middle → export keeps the right duration and audio, and
+  leaves the original untouched; the format-diagnostics reader; HDR tone-mapping path
+  exercised by every export test.
+
 ## [0.3.0] — 2026-10-21 — video editor foundation
 
 Milestone 1 of the v0.3–v0.9 roadmap. Everything from 0.2.0 is kept.

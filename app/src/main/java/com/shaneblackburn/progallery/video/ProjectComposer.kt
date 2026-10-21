@@ -106,6 +106,12 @@ object ProjectComposer {
             .setEffects(Effects(emptyList(), compositionVideoEffects))
             // Clips without audio (or muted) still produce a continuous audio track.
             .experimentalSetForceAudioTrack(true)
+            // Tone-map HDR (and 10-bit) input down to SDR. Phones (e.g. Samsung) record
+            // HDR10+/HEVC-10bit by default; the GL editing pipeline and our SDR grade shader
+            // can't consume BT.2020/10-bit, which otherwise fails with ERROR_CODE_DECODING_FAILED
+            // in both the preview and export. OpenGL tone-mapping is supported from API 29
+            // (our minSdk) and is a pass-through for SDR content.
+            .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
             .build()
     }
 

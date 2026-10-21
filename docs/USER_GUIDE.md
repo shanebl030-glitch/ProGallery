@@ -64,6 +64,13 @@ The same content is available inside the app under **Library → Settings → Us
   strength), move **Earlier/Later**, **Delete**.
 - **Photos** in a project have a **Photo duration** slider (0.5–15 s) instead of trimming,
   speed and audio. Photos are shown upright according to how the camera saved them.
+- **Split / cut:** scrub the playhead and tap the **scissors** in the transport bar to
+  split the clip there. To remove a section, split at its start and end, tap the middle
+  piece and delete it — the remaining footage joins up automatically, and audio stays in
+  sync.
+- If a video can’t be decoded through the effects preview on your phone, ProGallery shows
+  a **simplified preview** of the footage (with a banner); colour, speed and effects still
+  apply on export.
 - **Colour grading** (per clip): *Light* — exposure, brightness, contrast, highlights,
   shadows; *Colour* — saturation, vibrance, warmth, tint; *Detail* — sharpness. The live
   preview and the export use the same GPU grade.

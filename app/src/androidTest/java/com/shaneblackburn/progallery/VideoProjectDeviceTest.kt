@@ -118,6 +118,46 @@ class VideoProjectDeviceTest {
 
     private fun solid(w: Int, h: Int, color: Int) = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
 
+    // ------------------------------------------------------------ diagnostics
+
+    @Test fun videoDiagnosticsReadsFormat() {
+        val v = library().first { it.name == TestMedia.VIDEO }
+        val info = com.shaneblackburn.progallery.video.VideoDiagnostics.read(ctx, Uri.parse(v.uri))
+        assertNotNull(info, "format read")
+        assertTrue(info!!.width > 0 && info.height > 0, "dimensions ${info.width}x${info.height}")
+        assertTrue(info.mime.startsWith("video/"), "mime ${info.mime}")
+        // The CI test clip is plain SDR H.264/8-bit; summary should be human-readable.
+        android.util.Log.i("VideoProjectDeviceTest", "diag: ${info.summary()} hdr=${info.hdr} bit=${info.bitDepth}")
+        assertTrue(info.hdr == "SDR" || info.hdr == "unknown", "test clip is SDR")
+    }
+
+    // ------------------------------------------------------------ split & cut
+
+    /** Split the clip, delete the middle section, and export; duration/audio must be correct. */
+    @Test fun splitDeleteMiddleSectionExports() {
+        val v = videoClip() // ~4 s test clip with audio
+        val dur = v.sourceDurationMs
+        val a = (dur * 0.3).toLong()
+        val b = (dur * 0.7).toLong()
+        // Cut out the middle 40%: split at a and b, delete the middle piece.
+        val project = VideoProject(listOf(v)).splitAt(a).splitAt(b)
+        assertEquals(3, project.clips.size)
+        val cut = project.removeClip(1)
+        assertEquals(2, cut.clips.size)
+        val expected = cut.durationMs // ≈ 60% of the source
+        assertTrue(kotlin.math.abs(expected - (a + (dur - b))) < 5, "timeline math: $expected")
+
+        val e = export(cut, "split_cut")
+        try {
+            assertTrue(abs(e.durationMs - expected) <= 400, "duration ${e.durationMs} vs ~$expected")
+            assertTrue(e.hasAudio, "audio kept across the cut")
+        } finally { e.file.delete() }
+        // Original MediaStore file is untouched.
+        val still = MediaRepository(ctx).let { runBlocking { (it.loadOnce() as LoadResult.Success).items } }
+            .first { it.name == TestMedia.VIDEO }
+        assertEquals(v.sourceDurationMs, still.durationMs, "original video length unchanged")
+    }
+
     // ------------------------------------------------------------ saved projects
 
     @Test fun projectStoreSavesLoadsAndSurvivesBadFiles() = runBlocking {

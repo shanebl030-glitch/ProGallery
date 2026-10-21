@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material.icons.outlined.ZoomOut
 import androidx.compose.material3.AlertDialog
@@ -131,6 +132,7 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     var positionMs by remember { mutableLongStateOf(0L) }
     var playing by remember { mutableStateOf(false) }
     var previewError by remember { mutableStateOf<String?>(null) }
+    var simplifiedPreview by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var textEdit by remember { mutableStateOf<TimedText?>(null) }
@@ -153,7 +155,12 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
 
     // ---- Preview player (same Composition as export; rebuilt on every change)
     val preview = remember {
-        PreviewController(context, onPlayingChanged = { playing = it }, onError = { previewError = it })
+        PreviewController(
+            context,
+            onPlayingChanged = { playing = it },
+            onError = { previewError = it },
+            onMode = { simplifiedPreview = it == com.shaneblackburn.progallery.video.PreviewMode.SIMPLIFIED },
+        )
     }
     DisposableEffect(Unit) { onDispose { preview.release() } }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -241,8 +248,21 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                     modifier = Modifier.fillMaxSize(),
                 )
                 previewError?.let {
-                    Text(it, color = Color.White, textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(24.dp).background(Color.Black.copy(alpha = 0.6f)).padding(12.dp))
+                    if (simplifiedPreview) {
+                        // Working raw preview: a slim, non-blocking banner at the top.
+                        Text(
+                            it, color = Color.White, textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                                .background(Color(0xCC5B4300)).padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    } else {
+                        // Hard failure: centred message over black.
+                        Text(
+                            it, color = Color.White, textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(24.dp).background(Color.Black.copy(alpha = 0.6f)).padding(12.dp),
+                        )
+                    }
                 }
             }
         }
@@ -257,6 +277,18 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             }) { Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pause" else "Play") }
             Text("${Formatters.timecode(positionMs)} / ${Formatters.timecode(project.durationMs)}",
                 style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            // Split at the playhead — always available, whatever is selected.
+            IconButton(onClick = {
+                val before = project
+                vm.commit { it.splitAt(positionMs) }
+                val after = vm.project
+                if (after == before) {
+                    Toast.makeText(context, "Move the playhead inside a clip to split", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Select the piece that now starts at the playhead (the right-hand half).
+                    after.locate(positionMs)?.let { selection = TimelineSelection.ClipSel(it.clipIndex) }
+                }
+            }) { Icon(Icons.Outlined.ContentCut, "Split at playhead") }
             IconButton(onClick = { pxPerMs = (pxPerMs / 1.5f).coerceAtLeast(0.005f) }) { Icon(Icons.Outlined.ZoomOut, "Zoom timeline out") }
             IconButton(onClick = { pxPerMs = (pxPerMs * 1.5f).coerceAtMost(0.6f) }) { Icon(Icons.Outlined.ZoomIn, "Zoom timeline in") }
         }

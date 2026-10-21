@@ -70,6 +70,49 @@ class VideoProjectTest {
         assertSame(p, p.removeClip(7))
     }
 
+    @Test fun cutUnwantedMiddleSection() {
+        // One 10 s clip; remove the section from 3 s to 7 s, keeping 0–3 s and 7–10 s.
+        val base = VideoProject(listOf(clip(1, 10_000)))
+        // Split at the start and end of the unwanted section.
+        val twoCuts = base.splitAt(3_000).splitAt(7_000)
+        assertEquals(3, twoCuts.clips.size)
+        assertEquals(listOf(3_000L, 4_000L, 3_000L), twoCuts.clips.map { it.timelineDurationMs })
+        // Each piece still maps to the right part of the ORIGINAL source (A/V stays in sync).
+        assertEquals(0L to 3_000L, twoCuts.clips[0].trimStartMs to twoCuts.clips[0].trimEndMs)
+        assertEquals(3_000L to 7_000L, twoCuts.clips[1].trimStartMs to twoCuts.clips[1].trimEndMs)
+        assertEquals(7_000L to 10_000L, twoCuts.clips[2].trimStartMs to twoCuts.clips[2].trimEndMs)
+        // Delete the middle; the gap closes and the remaining footage plays continuously.
+        val cut = twoCuts.removeClip(1)
+        assertEquals(2, cut.clips.size)
+        assertEquals(6_000, cut.durationMs, "0–3 s + 7–10 s = 6 s")
+        assertEquals(listOf(0L, 3_000L), cut.clipStarts().toList())
+        // The frame at timeline 3 s is now the original's 7 s (continuous across the cut).
+        assertEquals(VideoProject.Location(1, 7_000, 0), cut.locate(3_000))
+    }
+
+    @Test fun trimAfterSplitIsIndependent() {
+        val p = VideoProject(listOf(clip(1, 8_000))).splitAt(4_000)
+        // Trim only the second piece's start; the first piece is untouched.
+        val trimmed = p.updateClip(1) { it.withTrim(5_000, 8_000) }
+        assertEquals(0L to 4_000L, trimmed.clips[0].trimStartMs to trimmed.clips[0].trimEndMs)
+        assertEquals(5_000L to 8_000L, trimmed.clips[1].trimStartMs to trimmed.clips[1].trimEndMs)
+        assertEquals(4_000 + 3_000, trimmed.durationMs)
+        // A split never yields a zero- or negative-length piece (both halves >= MIN_CLIP_MS).
+        val tiny = VideoProject(listOf(clip(1, 150)))
+        assertSame(tiny, tiny.splitAt(50), "50 ms piece is below the minimum clip length")
+    }
+
+    @Test fun splitRespectsSpeedWhenMappingSource() {
+        // A 2x clip: 10 s of source plays in 5 s of timeline. Split at timeline 2 s.
+        val p = VideoProject(listOf(clip(1, 10_000).copy(speed = 2f)))
+        val s = p.splitAt(2_000)
+        assertEquals(2, s.clips.size)
+        // 2 s timeline at 2x = 4 s of source → first piece 0–4 s source, second 4–10 s.
+        assertEquals(0L to 4_000L, s.clips[0].trimStartMs to s.clips[0].trimEndMs)
+        assertEquals(4_000L to 10_000L, s.clips[1].trimStartMs to s.clips[1].trimEndMs)
+        assertEquals(5_000, s.durationMs, "total timeline length unchanged by the split")
+    }
+
     @Test fun moveClip() {
         val p = VideoProject(listOf(clip(1, 1000), clip(2, 1000), clip(3, 1000)))
         assertEquals(listOf(2L, 3L, 1L), p.moveClip(0, 2).clips.map { it.id })
