@@ -75,9 +75,19 @@ The same content is available inside the app under **Library → Settings → Us
 - **Colour grading** (per clip): *Light* — exposure, brightness, contrast, highlights,
   shadows; *Colour* — saturation, vibrance, warmth, tint; *Detail* — sharpness. The live
   preview and the export use the same GPU grade.
-- **Add media** adds more photos and videos. Tap the **dot between clips** for a
-  transition: **Fade through black / white**, **Blur** or **Zoom** (0.3–1.5 s). Blur and
-  Zoom apply at the cut and appear in both the preview and the export.
+- **Add media** adds more photos and videos. Tap the **dot between clips** to open the
+  **transition picker** — a transition plays *between* two clips (to style one whole clip,
+  select it and use Colour/Filter). Choose from: **Standard cut**; **Fade** through black or
+  white; **Blur**; **Zoom** (in/out); **Cross zoom**; **Whip pan** (4 directions); **Push /
+  slide** (4 directions); **Wipe** (left/right/up/down/diagonal); **Iris**; **Light leak**;
+  **Glitch**. Each has a **Length** (0.3–2.0 s, default 1.0 s); where it applies you also get
+  **Direction** and **Strength**. The picker shows a live preview of every option, and the
+  timeline dot shows which transition is set. A **Match-cut helper** shows the end-of-A and
+  start-of-B frames side by side so you can line up composition, then use frame-step + trim to
+  align the cut.
+  - How they look: Fade/Wipe/Iris pass *through black (or white)* at the cut; Whip pan/Push
+    slide *through black*. A true cross-dissolve (both clips blended at once), reveal wipes/
+    pushes, and J-/L audio cuts need two-clip compositing and are planned for the next update.
 - **Text** adds a timed title (fade, slide-up or pop animation). **Music** adds a
   background track (volume, start point, loop, fade in/out). **Frame** sets 1:1, 9:16,
   16:9 or 4:5. **Fade in/out** from or to black or white.

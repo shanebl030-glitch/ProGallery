@@ -233,6 +233,8 @@ fun TransitionTools(
     aName: String,
     bName: String,
     onSet: (Transition) -> Unit,
+    endOfA: androidx.compose.ui.graphics.ImageBitmap? = null,
+    startOfB: androidx.compose.ui.graphics.ImageBitmap? = null,
 ) {
     Column {
         Text("Transition  ·  $aName → $bName", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp, 8.dp, 16.dp, 0.dp))
@@ -241,6 +243,9 @@ fun TransitionTools(
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
         )
+        // Match-cut helper: the two frames meeting at the cut, side by side, so you can line up
+        // composition/framing. This is a manual aid, not an automatic effect.
+        MatchReference(endOfA, startOfB)
         // Animated demo of the current choice (or the two clips cutting, for Standard cut).
         TransitionDemo(current, Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
 
@@ -285,6 +290,33 @@ fun TransitionTools(
         }
     }
 }
+
+/** Side-by-side of the two frames meeting at the cut — a manual aid for matching composition. */
+@Composable
+private fun MatchReference(endOfA: androidx.compose.ui.graphics.ImageBitmap?, startOfB: androidx.compose.ui.graphics.ImageBitmap?) {
+    if (endOfA == null && startOfB == null) return
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
+        Text("Match-cut helper", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            @Composable
+            fun thumb(img: androidx.compose.ui.graphics.ImageBitmap?, label: String) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(84.dp, 47.dp).clip(RoundedCornerShape(6.dp))) {
+                        if (img != null) androidx.compose.foundation.Image(img, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth())
+                    }
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            thumb(endOfA, "End of $A_LABEL")
+            thumb(startOfB, "Start of $B_LABEL")
+        }
+        Text("Line up framing/subject, then use ◀ ▶ frame-step and the clip trim handles to align the cut.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+private const val A_LABEL = "A"
+private const val B_LABEL = "B"
 
 /** Chooses the type, keeping the duration/direction/intensity when switching between effects. */
 private fun pick(t: TransitionType, current: Transition): Transition =

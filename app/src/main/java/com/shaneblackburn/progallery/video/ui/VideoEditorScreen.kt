@@ -370,9 +370,10 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                     current = project.transitionAfter(sel.afterIndex),
                     aName = project.clips.getOrNull(sel.afterIndex)?.name ?: "Clip ${sel.afterIndex + 1}",
                     bName = project.clips.getOrNull(sel.afterIndex + 1)?.name ?: "Clip ${sel.afterIndex + 2}",
-                ) { t ->
-                    vm.commit { it.setTransition(sel.afterIndex, t) }
-                }
+                    onSet = { t -> vm.commit { it.setTransition(sel.afterIndex, t) } },
+                    endOfA = project.clips.getOrNull(sel.afterIndex)?.uri?.let { thumbs[it]?.lastOrNull() },
+                    startOfB = project.clips.getOrNull(sel.afterIndex + 1)?.uri?.let { thumbs[it]?.firstOrNull() },
+                )
                 is TimelineSelection.TextSel -> project.texts.firstOrNull { it.id == sel.id }?.let { t ->
                     TextTools(
                         text = t,

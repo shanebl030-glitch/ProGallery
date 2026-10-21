@@ -104,3 +104,48 @@
   (~12 consecutive device-job boot/runner failures across re-runs and fresh pushes), so the
   per-clip transition RENDERING and the release smoke could not be re-verified in CI for the
   final commit. Code compiles every time; delivered with this caveat for on-phone check.
+
+## 2026-10-22 — Session 7 (v0.4.0, transition library)
+- Shane tested 0.3.2 on his phone: frame-step + split/cut worked; wasn't sure the Blur
+  transition actually rendered (well-founded — the per-clip fix was never CI-verified due to
+  the emulator outage). Asked for: verify existing transitions on export (inspect frames),
+  a much larger transition library (listed 12), direction/intensity/duration controls, a
+  better picker with previews + timeline display, plus J-/L-cuts and match-cut support — and
+  to explain limitations rather than ship broken effects.
+- Built a single source of truth for transitions in core: `Transitions.kt` holds the types +
+  parameters and `TransitionCpu`, a CPU reference of the exact shader maths (the VideoGrade
+  pattern). The GPU shader (`ClipTransitionEffect`) was rewritten to apply the same uniforms.
+- Verified the DESIGN locally without a GPU: 77 core tests (TransitionCpuTest renders each
+  effect and checks the pixels), plus a rendered contact sheet of all 11 transitions
+  (before/during/after a cut) — confirmed each looks right and meets at a shared neutral state
+  at the cut (no jump/frozen frame). Sent the contact sheet to Shane.
+- UI: grouped picker with a live animated demo + faithful per-option thumbnails (rendered from
+  TransitionCpu, so previews match the export and work even when the GPU preview falls back);
+  direction/strength/length controls; timeline glyphs; clip-edge-vs-whole-clip guidance; a
+  match-cut helper showing the end-of-A/start-of-B frames side by side.
+- Device test `allTransitionsRenderOnExport` added: exports every transition and inspects the
+  boundary + off-cut frames. NOT yet run — emulator outage continued into this session.
+
+### Investigation — what needs a two-clip overlap compositor (next milestone)
+The current engine applies transitions PER CLIP because a Media3 `EditedMediaItemSequence`
+plays clips strictly back-to-back with no overlap, and a composition-level effect gets per-clip
+timestamps (so it can't straddle a boundary). That makes these impossible today, and they are
+deliberately NOT faked:
+- **True cross dissolve** (both clips' live frames blended) — a fade-through-black is not a
+  dissolve, so CROSS_DISSOLVE is modelled but excluded from the picker.
+- **True reveal wipe/push** (the other clip shown underneath, not black).
+- **J-/L-cuts** — audio leading or trailing the visual cut, i.e. a clip's audio independent of
+  its video timing.
+The rendering approach for all three is the same: a second `EditedMediaItemSequence` carrying
+the incoming clip, positioned to OVERLAP the outgoing clip by the transition duration, composited
+with a per-frame alpha/mask (and, for J/L-cuts, an independent audio offset per clip). Risks to
+resolve before shipping: CompositionPlayer's multi-sequence *video* compositing support for the
+live preview in Media3 1.5.1 (export via Transformer is the better-supported path); precise gap/
+offset bookkeeping across splits/reorders; and verifying alpha compositing on-device. Planned as
+v0.4.1 once (a) the emulator is back to verify it and (b) the per-clip library here is confirmed
+on Shane's phone. A freeze-frame dissolve (overlaying the neighbour's boundary still via the
+proven OverlayEffect path) is a lower-risk interim option if a full-motion dissolve proves
+unreliable.
+
+- BLOCKER (still): GitHub hosted Android emulator outage — device verification of the whole
+  milestone is queued, not done. Delivered with that split stated clearly.

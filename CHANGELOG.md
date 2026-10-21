@@ -2,6 +2,62 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.0] — 2026-10-22 — transition library
+
+Milestone 4 (first part): a full, adjustable transition library with a visual picker.
+Everything from 0.3.2 is kept (frame-step, split/cut, diagnostics, colour grade, filters).
+
+### Added — 11 selectable transitions (up from 4)
+Grouped in the picker by family. Each has an adjustable **Length** (0.3–2.0 s, default 1.0 s);
+those that support it also have **Direction** and **Strength** controls:
+- **Cut** — Standard cut (no effect, no duration forced).
+- **Dissolve & fade** — Fade through black, Fade through white.
+- **Blur & zoom** — Blur (strength), Zoom (in/out + strength), Cross zoom (strength).
+- **Movement** — Whip pan (4 directions + strength), Push / slide (4 directions).
+- **Wipe & shape** — Wipe (left/right/up/down/diagonal), Iris (circle).
+- **Stylised** — Light leak (strength), Glitch (strength).
+
+### Added — picker, previews, timeline
+- A phone-friendly **transition picker** with a live animated **demo** of the current choice and
+  a faithful **thumbnail** on every option — both rendered from the exact maths the export uses,
+  so what you see is what you get (and previews work even where the GPU preview falls back).
+- The timeline **dot between clips** shows a glyph per transition and highlights when one is set;
+  tap it to open the picker. The panel states plainly that a transition is **between two clips**
+  (vs. the Colour/Filter tabs, which style one whole clip).
+- A **Match-cut helper**: the end-of-A and start-of-B frames shown side by side so you can line
+  up composition, then use frame-step + trim to align the cut. (A manual aid — not an automatic
+  effect that pretends any two clips match.)
+
+### How transitions render (and the honest limits)
+All transitions are applied **per clip** (the proven, reliable path): the outgoing clip's tail
+transforms toward a neutral state and the incoming clip's head transforms back out of it, meeting
+exactly at the cut (so there is no jump or frozen frame). Consequences, stated plainly:
+- Fade / Wipe / Iris pass **through black (or white)** at the cut — that is how they work.
+- Whip pan / Push slide **through black** (the area the clip vacates is black, not the other clip).
+- **Cross dissolve** (both clips' live frames blended), **true reveal** wipes/pushes (that show the
+  other clip underneath), and **J-/L-cuts** (audio leading/trailing the visual cut) need a
+  **two-clip overlap compositor**. That is designed and written up (docs/SESSION_LOG.md) as the
+  next milestone. No placeholder/broken buttons for these ship in 0.4.0.
+
+### Internals
+- New `core/video/Transitions.kt`: the transition types + parameters and a **CPU reference**
+  (`TransitionCpu`) of the exact shader maths, so the preview, the export and the unit tests can
+  never drift apart (the same pattern the colour grade uses).
+- `ClipTransitionEffect` GLSL rewritten to apply those uniforms; project files now store each
+  transition's direction + strength (older saves load with sensible defaults).
+
+### Testing
+- **77 core unit tests** (was 66): `TransitionCpuTest` renders every transition with the CPU
+  reference and checks the pixels change correctly and are identity at the endpoints.
+- Verified on my machine by **rendering real frames** of all 11 transitions (before/during/after
+  a cut) — the design is confirmed.
+- Device test added: `allTransitionsRenderOnExport` exports every transition between two different
+  clips and inspects the exported boundary + off-cut frames (effect present, time-limited, no
+  crash, no unexpected black frame).
+- **Not yet verified on a physical phone / on-device export:** the instrumented device suite could
+  not run — GitHub's hosted Android emulator has been failing for many hours (infrastructure). The
+  on-device run is queued and will run the moment it recovers; results will be reported then.
+
 ## [0.3.2] — 2026-10-22 — frame-step + more transitions
 
 ### Fixed

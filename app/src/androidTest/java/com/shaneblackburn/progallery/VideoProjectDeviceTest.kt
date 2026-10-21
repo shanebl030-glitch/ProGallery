@@ -20,6 +20,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.video.Clip
+import com.shaneblackburn.progallery.core.video.Transition
+import com.shaneblackburn.progallery.core.video.TransitionType
 import com.shaneblackburn.progallery.core.video.VideoColor
 import com.shaneblackburn.progallery.core.video.VideoFilter
 import com.shaneblackburn.progallery.core.video.VideoProject
@@ -142,6 +144,79 @@ class VideoProjectDeviceTest {
             n++
         }
         return sum.toDouble() / n
+    }
+
+    /** Mean luminance (0..255) of a frame. */
+    private fun meanLuma(b: Bitmap): Double {
+        var s = 0.0; var n = 0
+        for (y in 0 until b.height step 3) for (x in 0 until b.width step 3) {
+            val p = b.getPixel(x, y)
+            s += 0.2126 * Color.red(p) + 0.7152 * Color.green(p) + 0.0722 * Color.blue(p); n++
+        }
+        return s / n
+    }
+
+    /**
+     * Exports EVERY selectable transition between two visibly-different clips and inspects the
+     * boundary frame (peak effect) and an off-cut frame (should be untouched). This is the core
+     * of Shane's request: proof each effect actually renders in the exported file, lasts only its
+     * window, and never crashes export or leaves an unexpected black frame. Problems are collected
+     * so one bad transition doesn't hide the others.
+     */
+    @Test fun allTransitionsRenderOnExport() {
+        // Two distinct, short clips keep the software-GL exports light on the CI emulator.
+        val a = videoClip().withTrim(0, 1_200)
+        val b = videoClip().copy(id = 2).withTrim(1_500, 2_700)
+        val boundary = a.timelineDurationMs
+        val offCut = 300L // outside both transition windows (half-duration = 300 ms)
+        fun proj(t: TransitionType) = VideoProject(listOf(a, b), transitions = listOf(Transition(t, 600)))
+
+        val plain = export(proj(TransitionType.NONE), "trx_plain")
+        val plainCut = frame(plain, boundary)
+        val plainOff = frame(plain, offCut)
+        val hfPlainCut = highFrequency(plainCut)
+        val lumaPlainCut = meanLuma(plainCut)
+        android.util.Log.i("VideoProjectDeviceTest", "trx plain: hfCut=$hfPlainCut lumaCut=$lumaPlainCut")
+
+        val failures = mutableListOf<String>()
+        for (t in TransitionType.selectable) {
+            if (t == TransitionType.NONE) continue
+            try {
+                val e = export(proj(t), "trx_${t.name.lowercase()}")
+                try {
+                    if (abs(e.durationMs - 2 * boundary) > 500) failures += "$t: duration ${e.durationMs} (expected ~${2 * boundary})"
+                    val cut = frame(e, boundary); Shots.save("57_trx_${t.name.lowercase()}", cut)
+                    val off = frame(e, offCut)
+                    val diffCut = meanDiff(plainCut, cut, 0f, 1f)
+                    val diffOff = meanDiff(plainOff, off, 0f, 1f)
+                    val hfCut = highFrequency(cut)
+                    val lumaCut = meanLuma(cut)
+                    android.util.Log.i("VideoProjectDeviceTest",
+                        "trx $t: diffCut=$diffCut diffOff=$diffOff hfCut=$hfCut lumaCut=$lumaCut")
+                    // 1) The effect is visibly present at the cut.
+                    if (diffCut < 3.0) failures += "$t: no visible change at the cut (diff $diffCut)"
+                    // 2) The effect is time-limited: an off-cut frame is essentially the plain cut.
+                    if (diffOff > 20.0) failures += "$t: effect leaks outside its window (off-cut diff $diffOff)"
+                    // 3) Type-specific sanity at the boundary.
+                    when (t) {
+                        TransitionType.FADE_BLACK, TransitionType.WIPE, TransitionType.IRIS ->
+                            if (lumaCut > lumaPlainCut * 0.6) failures += "$t: should darken at the cut (luma $lumaCut vs $lumaPlainCut)"
+                        TransitionType.FADE_WHITE ->
+                            if (lumaCut < 200) failures += "$t: should go bright/white at the cut (luma $lumaCut)"
+                        TransitionType.LIGHT_LEAK ->
+                            if (lumaCut <= lumaPlainCut) failures += "$t: should brighten at the cut (luma $lumaCut vs $lumaPlainCut)"
+                        TransitionType.BLUR, TransitionType.CROSS_ZOOM ->
+                            if (hfCut > hfPlainCut * 0.9) failures += "$t: should soften at the cut (hf $hfCut vs $hfPlainCut)"
+                        else -> // ZOOM / WHIP_PAN / PUSH / GLITCH: movement/disturbance, must not be black.
+                            if (lumaCut < 4) failures += "$t: unexpected black frame at the cut (luma $lumaCut)"
+                    }
+                } finally { e.file.delete() }
+            } catch (ex: Throwable) {
+                failures += "$t: export threw ${ex.javaClass.simpleName}: ${ex.message}"
+            }
+        }
+        plain.file.delete()
+        assertTrue(failures.isEmpty(), "transition export problems:\n" + failures.joinToString("\n"))
     }
 
     @Test fun blurAndZoomTransitionsAffectBoundaryFrame() {
