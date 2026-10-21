@@ -145,8 +145,9 @@ class VideoProjectDeviceTest {
     }
 
     @Test fun blurAndZoomTransitionsAffectBoundaryFrame() {
-        val a = videoClip()
-        val b = videoClip().copy(id = 2)
+        // Short clips keep the three software-GL exports light on the CI emulator.
+        val a = videoClip().withTrim(0, 1_500)
+        val b = videoClip().copy(id = 2).withTrim(0, 1_500)
         val boundary = a.timelineDurationMs
         fun twoClips(t: com.shaneblackburn.progallery.core.video.TransitionType) =
             VideoProject(listOf(a, b), transitions = listOf(
