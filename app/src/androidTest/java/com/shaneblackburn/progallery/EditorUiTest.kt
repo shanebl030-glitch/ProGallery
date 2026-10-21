@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -31,7 +32,7 @@ class EditorUiTest {
 
         ui.tapText("Filters")
         ui.tapText("Warm")
-        Thread.sleep(1500)
+        Thread.sleep(4000) // filter thumbnails render in the background
         Shots.take("21_photo_editor_filter")
 
         ui.tapText("Crop")
@@ -39,8 +40,8 @@ class EditorUiTest {
         Thread.sleep(1200)
         Shots.take("22_photo_editor_crop_square")
 
-        ui.tapText("Frame")
-        ui.tapText("Instant")
+        ui.tapTextScrolling("Frame")
+        ui.tapTextScrolling("Instant")
         Thread.sleep(1200)
         Shots.take("23_photo_editor_frame")
 
@@ -70,16 +71,19 @@ class EditorUiTest {
         ui.tapText("Text")
         ui.obj(By.clazz("android.widget.EditText")).text = "ProGallery test"
         ui.tapText("Done")
-        Thread.sleep(2500)
-        // The preview must survive edits (it is rebuilt after every change).
+        Thread.sleep(5000)
+        // The preview must survive edits (it is rebuilt after every change) and show picture.
         assertTrue(!ui.has(By.textStartsWith("Preview unavailable"), 1_000), "preview still working after edits")
-        Shots.take("31_video_editor_title")
+        val shot = Shots.take("31_video_editor_title")!!
+        val previewLevel = Shots.brightness(shot, 0.22f, 0.38f)
+        assertTrue(previewLevel > 25.0, "preview shows a frame after an edit (brightness $previewLevel)")
 
-        val exportButtons = { ui.device.findObjects(By.text("Export")).sortedBy { it.visibleBounds.top } }
-        exportButtons().first().click()
+        ui.text("Export").click()
         ui.text("Export video")
         Shots.take("32_video_export_dialog")
-        exportButtons().last().click()
+        val confirm = ui.device.wait(Until.findObjects(By.text("Export")), 10_000)
+            ?.maxByOrNull { it.visibleBounds.top } ?: error("dialog Export button not found")
+        confirm.click()
 
         val out = TestMedia.waitFor("pgtest_clip_edited.mp4", 240_000)
         assertNotNull(out, "exported video saved to the gallery")

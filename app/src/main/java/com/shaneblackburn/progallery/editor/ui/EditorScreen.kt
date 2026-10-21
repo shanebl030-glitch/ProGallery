@@ -110,7 +110,7 @@ private val OVERLAY_TOOLS = setOf(EditorTool.TEXT, EditorTool.DRAW, EditorTool.S
 @Composable
 fun EditorScreen(item: MediaItem, onClose: () -> Unit, onSaved: (Uri?) -> Unit) {
     ProGalleryTheme(mode = ThemeMode.DARK, dynamicColor = false) {
-        Surface(color = Color(0xFF0E0E10), modifier = Modifier.fillMaxSize()) {
+        Surface(color = Color(0xFF0E0E10), contentColor = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize()) {
             EditorContent(item, onClose, onSaved)
         }
     }

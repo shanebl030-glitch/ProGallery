@@ -35,8 +35,15 @@ object TestMedia {
     fun cleanup() {
         val r = context.contentResolver
         val files = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        r.query(files, arrayOf(MediaStore.MediaColumns._ID, MediaStore.Files.FileColumns.MEDIA_TYPE),
-            "${MediaStore.MediaColumns.RELATIVE_PATH} IN (?, ?)", arrayOf(PHOTO_DIR, VIDEO_DIR), null)?.use { c ->
+        // Include pending (half-written) and trashed items, which queries hide by default;
+        // leftovers would otherwise collide with re-seeded files.
+        val args = android.os.Bundle().apply {
+            putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.MediaColumns.RELATIVE_PATH} IN (?, ?)")
+            putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, arrayOf(PHOTO_DIR, VIDEO_DIR))
+            putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_INCLUDE)
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE)
+        }
+        r.query(files, arrayOf(MediaStore.MediaColumns._ID, MediaStore.Files.FileColumns.MEDIA_TYPE), args, null)?.use { c ->
             while (c.moveToNext()) {
                 val id = c.getLong(0)
                 val isVideo = c.getInt(1) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
@@ -148,10 +155,23 @@ object Shots {
         listOfNotNull(TestMedia.context.getExternalFilesDir("screenshots"))
     }
 
-    fun take(name: String) {
+    fun take(name: String): Bitmap? {
         Thread.sleep(600) // let animations settle
-        val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
+        val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return null
         save(name, bmp)
+        return bmp
+    }
+
+    /** Mean brightness (0..255) of a horizontal band of a screenshot, as fractions of height. */
+    fun brightness(bmp: Bitmap, top: Float, bottom: Float): Double {
+        var sum = 0L; var n = 0
+        for (y in (bmp.height * top).toInt() until (bmp.height * bottom).toInt() step 4) {
+            for (x in 0 until bmp.width step 4) {
+                val p = bmp.getPixel(x, y)
+                sum += ((p shr 16) and 255) + ((p shr 8) and 255) + (p and 255); n++
+            }
+        }
+        return if (n == 0) 0.0 else sum.toDouble() / n / 3
     }
 
     fun save(name: String, bmp: Bitmap) {
@@ -188,6 +208,18 @@ class Ui {
     fun has(sel: BySelector, timeoutMs: Long = 5_000): Boolean = device.wait(Until.hasObject(sel), timeoutMs)
 
     fun tapText(t: String) = text(t).click()
+
+    /** Taps [t], scrolling horizontal lists to the right to reveal it if needed (like a user would). */
+    fun tapTextScrolling(t: String) {
+        if (has(By.text(t), 1_500)) { text(t).click(); return }
+        for (list in device.findObjects(By.scrollable(true))) {
+            repeat(5) {
+                runCatching { list.scroll(androidx.test.uiautomator.Direction.RIGHT, 0.8f) }
+                if (has(By.text(t), 700)) { text(t).click(); return }
+            }
+        }
+        error("Not found even after scrolling: $t")
+    }
     fun tapDesc(d: String) = desc(d).click()
 
     fun back() { device.pressBack(); device.waitForIdle() }

@@ -47,22 +47,35 @@ class PreviewController(
         view?.player = null
         old?.release()
         if (project.clips.isEmpty()) return false
+        val target = positionMs.coerceIn(0, maxOf(0, project.durationMs - 1))
         return try {
             val p = CompositionPlayer.Builder(context).build()
+            var pendingFrameSeek = !wasPlaying
             p.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) = onPlayingChanged(isPlaying)
-                override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) onReady() }
+                override fun onPlaybackStateChanged(state: Int) {
+                    if (state == Player.STATE_READY) {
+                        // While paused, seek once more after preparation so a frame is drawn
+                        // instead of a black preview.
+                        if (pendingFrameSeek) { pendingFrameSeek = false; p.seekTo(target) }
+                        onReady()
+                    }
+                }
                 override fun onPlayerError(error: PlaybackException) = onError("Preview unavailable: ${error.errorCodeName}")
             })
-            p.setComposition(ProjectComposer.build(project))
-            p.prepare()
-            p.seekTo(positionMs.coerceIn(0, maxOf(0, project.durationMs - 1)))
-            if (wasPlaying) p.play()
+            // Attach the surface before preparing so the first frame has somewhere to go.
             player = p
             view?.player = p
+            p.setComposition(ProjectComposer.build(project))
+            p.prepare()
+            p.seekTo(target)
+            if (wasPlaying) p.play()
             onError(null)
             true
         } catch (e: Exception) {
+            view?.player = null
+            player?.release()
+            player = null
             onError("Preview unavailable: ${e.message ?: e.javaClass.simpleName}")
             false
         }

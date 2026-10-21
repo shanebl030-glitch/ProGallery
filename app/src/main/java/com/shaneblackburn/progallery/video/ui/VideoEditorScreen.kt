@@ -85,7 +85,7 @@ import kotlin.math.roundToInt
 @Composable
 fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit) {
     ProGalleryTheme(mode = ThemeMode.DARK, dynamicColor = false) {
-        Surface(color = Color(0xFF0E0E10), modifier = Modifier.fillMaxSize()) {
+        Surface(color = Color(0xFF0E0E10), contentColor = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize()) {
             VideoEditorContent(item, onClose)
         }
     }

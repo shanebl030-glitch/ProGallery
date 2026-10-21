@@ -41,6 +41,9 @@ Personal-use build. Everything from 0.1.0 is unchanged.
 - Video editor live preview: clip and music durations are now supplied, which
   CompositionPlayer requires, and a fresh preview player is created after every edit
   (a CompositionPlayer accepts only one composition). Both found by the emulator tests.
+- Editor text and icons were too dark on the editors' near-black background (missing
+  content colour); now readable.
+- Video preview no longer goes black after an edit while paused.
 - Editor tool panels (photo and video) are height-limited and scroll, so tall panels such
   as Text no longer squeeze the preview and timeline.
 - Video titles now update every frame (double-buffered overlay); previously the first
