@@ -90,17 +90,17 @@ class GalleryUiTest {
         Shots.take("08_viewer_photo")
         ui.tapDesc("Details")
         // EXIF section from the seeded Make/Model; the sheet opens half-way, so drag it up if needed.
-        ui.text("Details")             // sheet is open
+        val title = ui.text("Details") // sheet is open
         Thread.sleep(800)              // opening animation
-        for (i in 0 until 4) {
-            if (ui.has(By.text("ProGalleryTest Emulator Cam"), 1_500)) break
-            // Scroll the sheet's own content (the lowest scrollable on screen).
-            ui.device.findObjects(By.scrollable(true)).maxByOrNull { it.visibleBounds.bottom }
-                ?.let { runCatching { it.scroll(androidx.test.uiautomator.Direction.DOWN, 0.8f) } }
+        if (!ui.has(By.text("ProGalleryTest Emulator Cam"), 1_500)) {
+            // Drag the sheet up by its title to expand it fully.
+            val b = title.visibleBounds
+            ui.device.drag(b.centerX(), b.centerY(), b.centerX(), ui.device.displayHeight / 10, 40)
+            Thread.sleep(800)
         }
+        Shots.take("09_viewer_details")
         ui.text("Camera")
         ui.text("ProGalleryTest Emulator Cam")
-        Shots.take("09_viewer_details")
         ui.back()                      // close sheet
         ui.device.wait(Until.gone(By.text("ProGalleryTest Emulator Cam")), 5_000) // sheet closing animation
         ui.back()                      // close viewer
