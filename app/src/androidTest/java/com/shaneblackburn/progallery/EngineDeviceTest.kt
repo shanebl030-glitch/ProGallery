@@ -142,6 +142,56 @@ class EngineDeviceTest {
         assertEquals(800, maxOf(small.width, small.height))
     }
 
+    private fun threadDump(): String = Thread.getAllStackTraces().entries
+        .filter { (t, st) -> st.any { it.className.contains("shaneblackburn") || it.className.contains("stream") || it.className.contains("ForkJoin") } }
+        .joinToString("\n") { (t, st) -> "THREAD ${t.name} ${t.state}:\n  " + st.take(25).joinToString("\n  ") }
+
+    private fun waitUntil(timeoutMs: Long, what: String, cond: () -> Boolean) {
+        val end = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < end) { if (cond()) return; Thread.sleep(100) }
+        val dump = threadDump()
+        android.util.Log.e("EngineDeviceTest", "timeout: $what\n$dump")
+        fail("Timed out waiting for $what.\n$dump")
+    }
+
+    /** The photo editor's live preview must re-render after an edit (diagnoses UI staleness). */
+    @Test fun editorViewModelPreviewUpdatesAfterEdit() {
+        val app = ctx.applicationContext as android.app.Application
+        var vm: com.shaneblackburn.progallery.editor.EditorViewModel? = null
+        val photo = item(TestMedia.PHOTOS[0])
+        instrumentation.runOnMainSync {
+            vm = com.shaneblackburn.progallery.editor.EditorViewModel(app).also { it.open(photo, 1080) }
+        }
+        waitUntil(30_000, "initial preview") {
+            vm!!.load.value is com.shaneblackburn.progallery.editor.EditorLoad.Ready && vm!!.preview.value != null
+        }
+        val first = vm!!.preview.value
+        val t0 = System.currentTimeMillis()
+        instrumentation.runOnMainSync { vm!!.commit { it.copy(filter = FilterLook.WARM) } }
+        waitUntil(30_000, "preview after Warm filter") { vm!!.preview.value !== first }
+        android.util.Log.i("EngineDeviceTest", "preview re-render took ${System.currentTimeMillis() - t0} ms")
+        val second = vm!!.preview.value
+        instrumentation.runOnMainSync { vm!!.commit { it.copy(geometry = Geometry(crop = NormRect(0f, 0f, 0.5f, 1f))) } }
+        waitUntil(30_000, "preview after crop") { vm!!.preview.value !== second }
+        val cropped = vm!!.preview.value!!
+        assertTrue(cropped.width < cropped.height, "crop applied to preview: ${cropped.width}x${cropped.height}")
+    }
+
+    @Test fun filterThumbnailsRender() {
+        val photo = item(TestMedia.PHOTOS[1])
+        val src = EditRenderer.decode(ctx.contentResolver, Uri.parse(photo.uri), 1080)
+        val t0 = System.currentTimeMillis()
+        var thumbs: Map<FilterLook, Bitmap>? = null
+        val worker = Thread { thumbs = com.shaneblackburn.progallery.editor.FilterThumbnails.render(src) }
+        worker.start()
+        waitUntil(30_000, "filter thumbnails") { thumbs != null }
+        android.util.Log.i("EngineDeviceTest", "thumbnails took ${System.currentTimeMillis() - t0} ms")
+        assertEquals(FilterLook.entries.size, thumbs!!.size)
+        val mono = thumbs!![FilterLook.MONO]!!
+        val p = mono.getPixel(mono.width / 2, mono.height / 2)
+        assertTrue(abs(((p shr 16) and 255) - (p and 255)) <= 3, "mono thumbnail is grey")
+    }
+
     // ------------------------------------------------------------ video editor engine
 
     private fun clip(): Clip {

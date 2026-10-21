@@ -277,16 +277,7 @@ fun FiltersPanel(
     LaunchedEffect(original) {
         val src = original?.asAndroidBitmap() ?: return@LaunchedEffect
         thumbs = withContext(Dispatchers.Default) {
-            val side = 160
-            val scale = side.toFloat() / maxOf(src.width, src.height)
-            val small = Bitmap.createScaledBitmap(src, (src.width * scale).roundToInt().coerceAtLeast(1),
-                (src.height * scale).roundToInt().coerceAtLeast(1), true)
-            val px = IntArray(small.width * small.height)
-            small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
-            FilterLook.entries.associateWith { look ->
-                val out = PixelPipeline(EditState(filter = look), minOf(small.width, small.height)).renderFull(px, small.width, small.height)
-                Bitmap.createBitmap(out, small.width, small.height, Bitmap.Config.ARGB_8888).asImageBitmap()
-            }
+            com.shaneblackburn.progallery.editor.FilterThumbnails.render(src).mapValues { it.value.asImageBitmap() }
         }
     }
     Column {
