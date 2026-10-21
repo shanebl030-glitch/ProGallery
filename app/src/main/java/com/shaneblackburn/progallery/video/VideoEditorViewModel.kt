@@ -252,22 +252,26 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
 
     private suspend fun probeImage(item: MediaItem): Clip? = withContext(Dispatchers.IO) {
         val uri = Uri.parse(item.uri)
-        var w = item.displayWidth
-        var h = item.displayHeight
-        if (w <= 0 || h <= 0) {
-            // MediaStore sometimes lacks dimensions; read them from the file (EXIF-rotated).
-            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            runCatching { getApplication<Application>().contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) } }
-            if (opts.outWidth <= 0) return@withContext null
-            val rot = runCatching {
-                getApplication<Application>().contentResolver.openInputStream(uri)?.use { androidx.exifinterface.media.ExifInterface(it).rotationDegrees } ?: 0
-            }.getOrDefault(0)
-            w = if (rot % 180 == 90) opts.outHeight else opts.outWidth
-            h = if (rot % 180 == 90) opts.outWidth else opts.outHeight
+        val resolver = getApplication<Application>().contentResolver
+        // RAW pixel dimensions (before EXIF rotation): Media3 decodes images without applying
+        // EXIF, so the composer rotates them upright using [sourceRotation].
+        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        runCatching { resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) } }
+        var rawW = opts.outWidth
+        var rawH = opts.outHeight
+        val rotation = runCatching {
+            resolver.openInputStream(uri)?.use { androidx.exifinterface.media.ExifInterface(it).rotationDegrees } ?: 0
+        }.getOrDefault(0)
+        if (rawW <= 0 || rawH <= 0) {
+            // Fall back to MediaStore's (already-oriented) size, undoing the rotation to raw.
+            if (item.displayWidth <= 0) return@withContext null
+            rawW = if (rotation % 180 == 90) item.displayHeight else item.displayWidth
+            rawH = if (rotation % 180 == 90) item.displayWidth else item.displayHeight
         }
         Clip(
             id = System.nanoTime(), uri = item.uri, name = item.name, sourceDurationMs = Clip.DEFAULT_IMAGE_MS,
-            width = w, height = h, hasAudio = false, isImage = true, mimeType = item.mimeType.ifBlank { null },
+            width = rawW, height = rawH, sourceRotation = ((rotation % 360) + 360) % 360,
+            hasAudio = false, isImage = true, mimeType = item.mimeType.ifBlank { null },
         ).withImageDuration(Clip.DEFAULT_IMAGE_MS)
     }
 

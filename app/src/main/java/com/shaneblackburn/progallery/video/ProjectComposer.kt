@@ -119,15 +119,22 @@ object ProjectComposer {
         if (ClipColorMatrix.needed(clip)) add(ClipColorMatrix(clip))
     }
 
-    private fun geometryEffect(clip: Clip): Effect? =
-        if (clip.quarterTurns == 0 && !clip.flipH && !clip.flipV) null
-        else ScaleAndRotateTransformation.Builder()
+    /**
+     * User-applied flips and quarter turns. [extraCwDegrees] adds clockwise rotation
+     * baked into the source (photos' EXIF orientation; videos get theirs from the
+     * container automatically, so pass 0).
+     */
+    private fun geometryEffect(clip: Clip, extraCwDegrees: Int = 0): Effect? {
+        val cw = (90 * clip.quarterTurns + extraCwDegrees) % 360
+        if (cw == 0 && !clip.flipH && !clip.flipV) return null
+        return ScaleAndRotateTransformation.Builder()
             .setScale(if (clip.flipH) -1f else 1f, if (clip.flipV) -1f else 1f)
             // Media3 rotates counter-clockwise for positive degrees.
-            .setRotationDegrees(-90f * clip.quarterTurns)
+            .setRotationDegrees(-cw.toFloat())
             .build()
+    }
 
-    /** A still photo shown for the clip's duration (Media3 decodes it and applies EXIF rotation). */
+    /** A still photo shown for the clip's duration. Media3 does not apply EXIF, so we rotate it here. */
     private fun imageItem(clip: Clip, outW: Int, outH: Int): EditedMediaItem {
         val durationMs = clip.timelineDurationMs
         val mediaItem = MediaItem.Builder()
@@ -136,7 +143,7 @@ object ProjectComposer {
             .setImageDurationMs(durationMs)
             .build()
         val video = buildList<Effect> {
-            geometryEffect(clip)?.let(::add)
+            geometryEffect(clip, extraCwDegrees = clip.sourceRotation)?.let(::add)
             addAll(colorEffects(clip))
             add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
         }

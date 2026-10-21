@@ -36,8 +36,12 @@ class ProjectsUiTest {
         val video = TestMedia.VIDEO
 
         ui.tapText("Library")
+        assertTrue(ui.scrollToVertical(By.text("Video projects")), "Video projects tile in Library")
         ui.tapText("Video projects")
-        ui.tapText("New video")
+        ui.text("Video projects", 15_000) // Projects screen top bar
+        Thread.sleep(800)
+        Shots.take("69_projects_empty")
+        ui.tapTextScrolling("New video")
         ui.tapDesc("Pick $photo")
         ui.tapDesc("Pick $video")
         Thread.sleep(500)

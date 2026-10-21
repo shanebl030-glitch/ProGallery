@@ -284,14 +284,29 @@ class Ui {
 
     /** Taps [t], scrolling horizontal lists to the right to reveal it if needed (like a user would). */
     fun tapTextScrolling(t: String) {
-        if (has(By.text(t), 1_500)) { text(t).click(); return }
-        for (list in device.findObjects(By.scrollable(true))) {
-            repeat(5) {
-                runCatching { list.scroll(androidx.test.uiautomator.Direction.RIGHT, 0.8f) }
-                if (has(By.text(t), 700)) { text(t).click(); return }
+        if (has(By.text(t), 2_000)) { text(t).click(); return }
+        for (dir in listOf(androidx.test.uiautomator.Direction.RIGHT, androidx.test.uiautomator.Direction.LEFT)) {
+            for (list in device.findObjects(By.scrollable(true))) {
+                repeat(8) {
+                    runCatching { list.scroll(dir, 0.75f) }
+                    device.waitForIdle()
+                    if (has(By.text(t), 800)) { text(t).click(); return }
+                }
             }
         }
         error("Not found even after scrolling: $t")
+    }
+
+    /** Scrolls the first vertical scrollable until [sel] appears (for lists/grids), then returns it. */
+    fun scrollToVertical(sel: BySelector, maxSwipes: Int = 8): Boolean {
+        if (has(sel, 1_500)) return true
+        repeat(maxSwipes) {
+            device.findObjects(By.scrollable(true)).maxByOrNull { it.visibleBounds.height() }
+                ?.let { runCatching { it.scroll(androidx.test.uiautomator.Direction.DOWN, 0.7f) } }
+            device.waitForIdle()
+            if (has(sel, 800)) return true
+        }
+        return has(sel, 800)
     }
     fun tapDesc(d: String) = desc(d).click()
 
