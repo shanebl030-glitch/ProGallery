@@ -43,6 +43,7 @@ class PreviewController(
     /** Full technical reason the full-effects preview fell back (for diagnostics), or null. */
     private val onFallbackReason: (String?) -> Unit = {},
 ) {
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var player: Player? = null
     private var view: PlayerView? = null
     private var current: VideoProject? = null
@@ -80,8 +81,11 @@ class PreviewController(
                     }
                 }
                 override fun onPlayerError(error: PlaybackException) {
-                    // The effects pipeline couldn't play this media; drop to raw playback.
-                    fallbackToSimplePlayer(project, target, wasPlaying, error)
+                    // Don't release the CompositionPlayer from inside its own error callback
+                    // (re-entrant release throws IllegalStateException). Defer to the next tick.
+                    mainHandler.post {
+                        if (player === p) fallbackToSimplePlayer(project, target, wasPlaying, error)
+                    }
                 }
             })
             player = p
@@ -211,7 +215,9 @@ class PreviewController(
 
     private fun releasePlayer() {
         view?.player = null
-        player?.release()
+        // CompositionPlayer.release() can throw (checkState) if it failed to prepare; never
+        // let that crash the editor.
+        runCatching { player?.release() }.onFailure { android.util.Log.w("PreviewController", "release threw", it) }
         player = null
     }
 
