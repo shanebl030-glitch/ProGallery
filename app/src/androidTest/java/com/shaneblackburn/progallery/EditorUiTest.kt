@@ -90,7 +90,7 @@ class EditorUiTest {
         assertTrue(previewLevel > 25.0, "preview shows a frame after an edit (brightness $previewLevel)")
         // Then fade in from black (frame at 0:00 is legitimately black after this).
         ui.back() // first Back deselects the title, showing the project tools again
-        assertTrue(ui.has(By.text("Fade in from black"), 5_000), "Back deselects and shows project tools")
+        assertTrue(ui.has(By.text("Fade in from black"), 15_000), "Back deselects and shows project tools")
         assertTrue(!ui.has(By.text("Discard"), 500), "Back with a selection doesn't offer to discard")
         ui.tapText("Fade in from black")
 

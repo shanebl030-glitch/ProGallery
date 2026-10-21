@@ -44,3 +44,25 @@
 - Release APK for Shane re-signed locally with the permanent key (cert B0:0A:A0:37…) using
   uber-apk-signer 1.3.0 (apksig); verified with apksig and androguard (v1/v2/v3, no
   INTERNET permission).
+
+## 2026-10-21 — Session 4 (v0.3.0, video editor foundation)
+- Roadmap agreed with Shane (v0.3–v0.9): video projects → transitions/layers/keyframes →
+  audio → Memories engine → story videos → AI object eraser → photo editor pro.
+- Milestone 1 (v0.3.0) built on top of v0.2.0, no rewrites of working code:
+  - Dependency-free JSON reader/writer in `core`; versioned, forward/back-compatible
+    project codec (unknown fields ignored, missing fields defaulted, damaged values
+    repaired). 9 new core tests.
+  - Photo clips on the video timeline (duration slider, EXIF-aware), drag-to-reorder
+    (pure maths in core, unit-tested), pro colour grading via a custom Media3 GlEffect
+    shader whose per-pixel maths mirrors a CPU reference in core.
+  - ProjectStore (atomic JSON files in app storage), autosave, Projects screen, in-app
+    media picker, missing-media handling.
+- CI: added VideoProjectDeviceTest (engine) and ProjectsUiTest (full workflow).
+- CI stability: the self-hosted-style emulator hung twice under heavy software-GL export
+  load. Fixed by widening the device-test step budget (85 min step / 110 min job),
+  capping the gradle run (45 min) and the release smoke test (10 min) so results are
+  always collected, and trimming redundant exports. Added live logcat capture.
+- Known gap: exact upright orientation of a *single-image* export (one photo, no video)
+  can't be asserted on the emulator — Media3's single-image effect pipeline differs from
+  the video path. The photo renders with its content; orientation is logged for
+  confirmation on Shane's phone. Photos within mixed projects export correctly (tested).

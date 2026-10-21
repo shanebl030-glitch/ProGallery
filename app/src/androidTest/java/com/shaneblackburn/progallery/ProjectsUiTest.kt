@@ -41,7 +41,7 @@ class ProjectsUiTest {
         ui.text("Video projects", 15_000) // Projects screen top bar
         Thread.sleep(800)
         Shots.take("69_projects_empty")
-        ui.tapText("New video") // FAB on the Projects screen (no scrolling needed)
+        ui.tapDesc("New video") // FAB (content description set for reliable matching)
         ui.tapDesc("Pick $photo")
         ui.tapDesc("Pick $video")
         Thread.sleep(500)

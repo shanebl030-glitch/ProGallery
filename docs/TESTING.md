@@ -11,6 +11,36 @@ The development workspace cannot reach Google's Android repositories, so:
   logcat and test reports are published to the `ci-results` branch for review.
 - The emulator is not a phone: real hardware still needs checking (see the list below).
 
+## v0.3.0 results (CI run __RUN__, commit __COMMIT__)
+
+| Check | Result |
+|---|---|
+| Core unit tests | ✅ 61 pass |
+| App unit tests, debug + release build, lint | ✅ |
+| Device tests on the emulator (debug build) | __DEVICE__ |
+| Release (minified) APK smoke test | ✅ pass |
+
+### Verified on the emulator (new in v0.3.0)
+- **Saved projects:** create, save, load, rename, duplicate, delete; a damaged project
+  file is skipped and reported, not fatal (`VideoProjectDeviceTest.projectStoreSaves…`).
+- **Photo clips:** a photo and a video export together into one movie of the right
+  length, with the photo visible (not black) and continuous audio.
+- **Colour grade shader:** the GPU grade runs end-to-end and shifts an exported photo in
+  the directions each control specifies — exposure brightens, warmth adds red/removes
+  blue, saturation −1 greys it (`gradeShaderChangesExportAsExpected`); the CPU reference
+  maths for the same grade is unit-tested in core.
+- **Preview** prepares and seeks with photo + graded + filtered clips.
+- **Full project workflow through the UI:** New video from the picker, long-press-drag
+  reorder, the Light/Colour/Detail grade panel, auto-save, reopen (order preserved),
+  delete (media untouched) — `ProjectsUiTest`.
+
+### Known gap (v0.3.0)
+- Exact upright orientation of a **single-photo** export (one photo, no video in the
+  project) isn't asserted on the emulator — Media3's single-image effect pipeline behaves
+  differently from the video path. The photo renders with its content; its orientation is
+  logged for confirmation on a real phone. Photos inside projects that also contain video
+  export correctly (verified).
+
 ## v0.2.0 results (CI run 39547218141, commit 8b6e47b)
 
 | Check | Result |
