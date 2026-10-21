@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -97,7 +98,9 @@ class GalleryUiTest {
         ui.text("ProGalleryTest Emulator Cam")
         Shots.take("09_viewer_details")
         ui.back()                      // close sheet
+        ui.device.wait(Until.gone(By.text("ProGalleryTest Emulator Cam")), 5_000) // sheet closing animation
         ui.back()                      // close viewer
+        if (!ui.has(By.clazz("android.widget.EditText"), 3_000)) ui.back()
 
         // Open the video: player controls appear.
         val field2 = ui.obj(By.clazz("android.widget.EditText"))
