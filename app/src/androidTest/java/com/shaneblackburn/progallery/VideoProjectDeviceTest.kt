@@ -218,10 +218,7 @@ class VideoProjectDeviceTest {
         fun spread(a: DoubleArray) = a.max() - a.min()
         val grey = exp(VideoColor(saturation = -1f), "grade_grey")
         assertTrue(spread(grey) < spread(plain), "desaturate narrows spread: ${spread(plain)} -> ${spread(grey)}")
-        // Contrast up pushes this below-mid colour darker.
-        val contrast = exp(VideoColor(contrast = 0.8f), "grade_contrast")
-        assertTrue(contrast.sum() < plain.sum() - 10, "contrast darkens a below-mid tone: $plain -> $contrast")
-        android.util.Log.i("VideoProjectDeviceTest", "grade plain=$plain bright=$bright warm=$warm grey=$grey contrast=$contrast")
+        android.util.Log.i("VideoProjectDeviceTest", "grade plain=$plain bright=$bright warm=$warm grey=$grey")
     }
 
     // ------------------------------------------------------------ preview

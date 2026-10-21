@@ -10,7 +10,7 @@ adb logcat -v time > "$OUT/logcat_live.txt" 2>/dev/null &
 LOGCAT_PID=$!
 # Per-test limit (5 min) and an overall cap below the CI step timeout, so reports,
 # screenshots and logs are always collected even if a test hangs.
-timeout --signal=TERM 2280 ./gradlew :app:connectedDebugAndroidTest \
+timeout --signal=TERM 2700 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
   -Pandroid.testInstrumentationRunnerArguments.timeout_msec=300000 \
   --stacktrace > "$OUT/device-test.log" 2>&1
@@ -35,6 +35,6 @@ adb shell input swipe $((W/2)) $((H*85/100)) $((W/2)) $((H*20/100)) 400; sleep 3
 adb exec-out screencap -p > "$OUT/screenshots/61_launcher_drawer.png"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
 # Then the minified release build, driven through adb.
-bash .github/scripts/release-smoke.sh
+timeout --signal=TERM 600 bash .github/scripts/release-smoke.sh
 ls "$OUT/screenshots" | head -50
 exit 0
