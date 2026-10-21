@@ -140,7 +140,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Build app and test APKs
-        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace
 
       - name: Run instrumented tests on emulator (Android 14)
         timeout-minutes: 50
@@ -174,6 +174,7 @@ jobs:
           DEV=$(cat out/device/exit_code 2>/dev/null || echo missing)
           [ "$DEV" = "0" ] && DEVRES=success || DEVRES="failure($DEV)"
           echo "device_tests=$DEVRES" >> out/SUMMARY.txt
+          echo "release_smoke=$(cat out/device/release_smoke_result 2>/dev/null || echo missing)" >> out/SUMMARY.txt
           cat out/SUMMARY.txt
           cd out
           rm -f *-debug*.apk
@@ -186,4 +187,5 @@ jobs:
       - name: Fail if build or device tests failed
         run: |
           grep -q '^device_tests=success' out/SUMMARY.txt
+          grep -q '^release_smoke=pass' out/SUMMARY.txt
           [ "${{ needs.build.result }}" = "success" ]

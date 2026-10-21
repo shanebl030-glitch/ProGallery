@@ -23,5 +23,7 @@ W=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | cut -dx -f1); H=$(a
 adb shell input swipe $((W/2)) $((H*85/100)) $((W/2)) $((H*20/100)) 400; sleep 3
 adb exec-out screencap -p > "$OUT/screenshots/61_launcher_drawer.png"
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null
+# Then the minified release build, driven through adb.
+bash .github/scripts/release-smoke.sh
 ls "$OUT/screenshots" | head -50
 exit 0
