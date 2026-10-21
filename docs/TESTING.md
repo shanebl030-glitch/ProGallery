@@ -11,6 +11,39 @@ The development workspace cannot reach Google's Android repositories, so:
   logcat and test reports are published to the `ci-results` branch for review.
 - The emulator is not a phone: real hardware still needs checking (see the list below).
 
+## v0.3.1 results (CI run 39646606469, commit 50d15f3)
+
+| Check | Result |
+|---|---|
+| Core unit tests | ✅ 64 pass |
+| App unit tests, debug + release build, lint | ✅ |
+| Device tests on the emulator (debug build) | ✅ 26 / 26 pass |
+| Release (minified) APK smoke test | ✅ pass |
+
+### Fixed / added in v0.3.1 (verified on the emulator)
+- **Split → delete middle section → export:** the exported video has the right duration
+  and keeps its audio, and the original MediaStore file is unchanged
+  (`VideoProjectDeviceTest.splitDeleteMiddleSectionExports`).
+- **Format diagnostics** read a clip's codec/resolution/fps/bit-depth/HDR
+  (`videoDiagnosticsReadsFormat`; the CI clip reports "H.264 640×360 30fps 8-bit"). This
+  is what names the format in a preview-failure message and in logcat.
+- **HDR tone-mapping** (`HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL`) is on every export
+  and preview composition; all export tests pass through it, confirming it's a no-op for
+  SDR content.
+- Core: split-at-playhead source-time accuracy, cut-the-middle-section, trim-after-split
+  independence, speed-aware split.
+
+### The phone decoding fix — what's verified and what isn't
+- **Root cause (high confidence):** the preview used Media3's default `HDR_MODE_KEEP_HDR`,
+  which the editing/preview pipeline and the SDR grade shader can't consume for HDR10+ /
+  10-bit HEVC — the format phones (e.g. Samsung) record by default. The fix tone-maps to
+  SDR in OpenGL (Android 10+).
+- **Cannot be verified from here:** the CI emulator has no HDR decoder and no HDR test
+  clip, so the actual HDR decode on Shane's phone is **not** proven by CI. It needs a check
+  on the affected device. If it still fails, the preview now falls back to plain playback
+  (which decodes HDR natively) and the error names the exact format — collect that text or
+  the logcat line tagged `VideoDiagnostics` / `PreviewController`.
+
 ## v0.3.0 results (CI run 39573816367, commit 0492424)
 
 | Check | Result |

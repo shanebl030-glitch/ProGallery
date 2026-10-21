@@ -66,3 +66,19 @@
   can't be asserted on the emulator — Media3's single-image effect pipeline differs from
   the video path. The photo renders with its content; orientation is logged for
   confirmation on Shane's phone. Photos within mixed projects export correctly (tested).
+
+## 2026-10-22 — Session 5 (v0.3.1, preview decode fix + split/cut)
+- Shane reported ERROR_CODE_DECODING_FAILED in the preview on a real Samsung portrait
+  video (thumbnails fine, preview dead). Diagnosed as HDR10+/10-bit HEVC vs Media3's
+  default HDR_MODE_KEEP_HDR.
+- Fix: Composition tone-maps HDR/10-bit to SDR via OpenGL (preview + export share it).
+- Added a raw-ExoPlayer preview fallback (decodes HDR natively) with a banner, plus
+  VideoDiagnostics (codec/res/fps/bit-depth/HDR) surfaced in errors and logs.
+- Added a prominent Split-at-playhead button in the transport bar; the split/delete-middle
+  workflow uses existing core ops (splitAt/removeClip/withTrim) with source-time accuracy.
+- Tests: 64 core, 26/26 device (incl. split→delete→export and the diagnostics reader).
+- Caveat: the HDR decode itself can't be verified on the CI emulator (no HDR decoder);
+  needs confirmation on Shane's phone. One pre-existing flaky photo-editor "Frame" tab
+  scroll was made robust with raw swipe gestures.
+- CI emulator remained flaky (two boot/hang failures and one androidTest compile error —
+  a missing Uri import — before the green run).
