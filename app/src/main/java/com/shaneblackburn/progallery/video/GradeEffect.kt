@@ -84,7 +84,11 @@ void main() {
 """
         // Mirrors VideoGrade.apply(). Sharpening (unsharp mask on a 4-neighbour blur) runs first.
         const val FRAGMENT = """
+#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
+#else
+precision mediump float;
+#endif
 uniform sampler2D uTexSampler;
 uniform vec2 uTexel;
 uniform float uExpGain;
