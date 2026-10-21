@@ -117,7 +117,7 @@ jobs:
   device-tests:
     # Pinned: the emulator is known to boot reliably with KVM on Ubuntu 24.04 runners.
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -143,7 +143,7 @@ jobs:
         run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace
 
       - name: Run instrumented tests on emulator (Android 14)
-        timeout-minutes: 50
+        timeout-minutes: 60
         run: bash .github/scripts/run-emulator.sh
 
       - uses: actions/upload-artifact@v4

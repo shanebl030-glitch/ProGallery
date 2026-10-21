@@ -2,6 +2,35 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.3.0] — 2026-10-21 — video editor foundation
+
+Milestone 1 of the v0.3–v0.9 roadmap. Everything from 0.2.0 is kept.
+
+### Added
+- **Video projects** (Library › Video projects): projects save automatically and can be
+  reopened, renamed, duplicated and deleted. Saved as versioned JSON in app storage with
+  atomic writes; damaged files are skipped and reported, never fatal. Projects reference
+  media by its MediaStore link — nothing is copied and originals are never changed.
+- **New video** from several photos and videos, chosen in an in-app picker (numbered in
+  tap order). Using the gallery's own media links means saved projects keep access to
+  their files.
+- **Photo clips** on the video timeline with a duration slider (0.5–15 s); shown upright
+  according to EXIF orientation; split works on photos too.
+- **Drag to reorder:** long-press a clip on the timeline and drag it.
+- **Pro colour grading** per clip, on the GPU, identical in preview and export:
+  exposure, brightness, contrast, highlights, shadows, saturation, vibrance, warmth,
+  tint and sharpness, grouped into Light / Colour / Detail with Reset all.
+- **Filter strength** slider for video filters.
+- **Missing media** banner when a project's source file was deleted or moved, with a
+  one-tap "Remove them".
+- "Keep this video project?" when leaving a quick edit of a single video.
+
+### Changed
+- Version 0.3.0 (versionCode 3).
+- "Add clip" is now "Add media" and accepts photos as well as videos.
+- Video colour controls moved from a 4-slider colour matrix to the new grading shader
+  (the look of brightness/contrast/saturation/warmth changes slightly).
+
 ## [0.2.0] — 2026-10-21 — photo editor, video editor, new icon
 
 Personal-use build. Everything from 0.1.0 is unchanged.

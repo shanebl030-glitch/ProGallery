@@ -50,23 +50,33 @@ The same content is available inside the app under **Library → Settings → Us
   *Export options* choose JPEG/PNG/WebP, quality, size, keeping details, removing location.
 
 ## Editing videos
-- Open a video and tap the **pencil**. The original is never changed; the result is
-  saved as a new video (`name_edited.mp4`) next to it.
+- **One video:** open it and tap the **pencil**.
+- **A movie from several photos and videos:** Library → **Video projects** → **New
+  video**, then tap items in the order you want them (they're numbered) and **Create**.
+- **Projects save automatically** (Library → Video projects): reopen, rename, duplicate
+  or delete. If you edited a single video and leave, ProGallery asks whether to keep it
+  as a project. Projects only reference your media; nothing is copied or changed.
 - Scroll the **timeline** to move the playhead; zoom with the magnifier buttons.
-- Press **Back** to deselect a clip, title or music track (Back again offers to discard
-  unsaved edits).
-- Tap a **clip** to select it, drag its edges to **trim**. Clip tools: **Split** at the
-  playhead, **Speed** 0.25×–4× (pitch preserved), **Audio** volume/mute, **Rotate**,
-  **Flip**, **Colour** (brightness, contrast, saturation, warmth), **Filter**, move
-  **Earlier/Later**, **Delete**.
-- **Add clip** joins more videos. Tap the **dot between clips** for a transition (fade
-  through black or white, 0.3–1.5 s).
+- Press **Back** to deselect a clip, title or music track.
+- Tap a **clip** to select it, drag its edges to **trim**. **Long-press and drag** a clip
+  to reorder. Clip tools: **Split** at the playhead, **Speed** 0.25×–4× (pitch
+  preserved), **Audio** volume/mute, **Rotate**, **Flip**, **Colour**, **Filter** (with
+  strength), move **Earlier/Later**, **Delete**.
+- **Photos** in a project have a **Photo duration** slider (0.5–15 s) instead of trimming,
+  speed and audio. Photos are shown upright according to how the camera saved them.
+- **Colour grading** (per clip): *Light* — exposure, brightness, contrast, highlights,
+  shadows; *Colour* — saturation, vibrance, warmth, tint; *Detail* — sharpness. The live
+  preview and the export use the same GPU grade.
+- **Add media** adds more photos and videos. Tap the **dot between clips** for a
+  transition (fade through black or white, 0.3–1.5 s).
 - **Text** adds a timed title (fade, slide-up or pop animation). **Music** adds a
   background track (volume, start point, loop, fade in/out). **Frame** sets 1:1, 9:16,
   16:9 or 4:5. **Fade in/out** from or to black or white.
+- If a source file was deleted or moved, a banner offers **Remove them**.
 - **Export:** resolution (original down to 480p), frame rate (only lowers), quality,
   H.264 or HEVC, with an estimated file size. Export continues in the background with a
-  progress notification and a Cancel button.
+  progress notification and a Cancel button. Exports are saved as new videos
+  (`name_edited.mp4`); originals are never overwritten.
 
 ## Searching
 - Words match file and album names: `holiday`, `"beach day"`.

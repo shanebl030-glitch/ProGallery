@@ -5,10 +5,21 @@ OUT=device-out
 mkdir -p "$OUT/screenshots"
 PKG=com.shaneblackburn.progallery.debug
 
-./gradlew :app:connectedDebugAndroidTest \
+# Stream logcat to a file during the run, so a hang still leaves evidence.
+adb logcat -v time > "$OUT/logcat_live.txt" 2>/dev/null &
+LOGCAT_PID=$!
+# Per-test limit (5 min) and an overall cap below the CI step timeout, so reports,
+# screenshots and logs are always collected even if a test hangs.
+timeout --signal=TERM 2280 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
+  -Pandroid.testInstrumentationRunnerArguments.timeout_msec=300000 \
   --stacktrace > "$OUT/device-test.log" 2>&1
-echo $? > "$OUT/exit_code"
+CODE=$?
+[ $CODE -eq 124 ] && echo "TIMED OUT after 38 min" >> "$OUT/device-test.log"
+echo $CODE > "$OUT/exit_code"
+kill $LOGCAT_PID 2>/dev/null
+# Last test the runner started (helps when it hung).
+grep -E "TestRunner: (started|finished|failed)" "$OUT/logcat_live.txt" | tail -20 > "$OUT/last_tests.txt"
 
 # Test reports
 find app/build/outputs/androidTest-results -name '*.xml' -exec cp {} "$OUT/" \; 2>/dev/null
