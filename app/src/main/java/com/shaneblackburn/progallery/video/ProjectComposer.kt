@@ -22,6 +22,7 @@ import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
 import com.google.common.collect.ImmutableList
 import com.shaneblackburn.progallery.core.video.Clip
+import com.shaneblackburn.progallery.core.video.ClipEdge
 import com.shaneblackburn.progallery.core.video.VideoGrade
 import com.shaneblackburn.progallery.core.video.VideoProject
 import kotlin.math.roundToInt
@@ -76,7 +77,7 @@ object ProjectComposer {
         require(project.clips.isNotEmpty()) { "Add at least one clip" }
         val (outW, outH) = outputSize(project, settings)
 
-        val videoItems = project.clips.map { clip -> editedItem(clip, outW, outH, settings) }
+        val videoItems = project.clips.mapIndexed { index, clip -> editedItem(project, index, clip, outW, outH, settings) }
         val sequences = mutableListOf(EditedMediaItemSequence(videoItems, /* isLooping = */ false))
 
         project.music?.let { music ->
@@ -96,9 +97,9 @@ object ProjectComposer {
             sequences += EditedMediaItemSequence(listOf(musicItem), music.loop)
         }
 
+        // Fades and transitions are applied per clip (see ClipTransitionEffect), not here,
+        // because a composition effect can't tell where a clip boundary falls on the timeline.
         val compositionVideoEffects = buildList<Effect> {
-            if (TransitionGlEffect.needed(project)) add(TransitionGlEffect(project))
-            if (TimelineFadeMatrix.needed(project)) add(TimelineFadeMatrix(project))
             if (project.texts.isNotEmpty()) add(OverlayEffect(ImmutableList.of<TextureOverlay>(TimedTextOverlay(project, outW, outH))))
             if (settings.frameRate > 0) add(FrameDropEffect.createDefaultFrameDropEffect(settings.frameRate.toFloat()))
         }
@@ -116,8 +117,13 @@ object ProjectComposer {
             .build()
     }
 
-    private fun editedItem(clip: Clip, outW: Int, outH: Int, settings: VideoExportSettings): EditedMediaItem =
-        if (clip.isImage) imageItem(clip, outW, outH) else videoItem(clip, outW, outH)
+    private fun editedItem(project: VideoProject, index: Int, clip: Clip, outW: Int, outH: Int, settings: VideoExportSettings): EditedMediaItem {
+        val edge = project.clipEdge(index)
+        return if (clip.isImage) imageItem(clip, outW, outH, edge) else videoItem(clip, outW, outH, edge)
+    }
+
+    /** The per-clip transition/fade effect, appended last so it sees the clip's 0-based output time. */
+    private fun transitionEffect(edge: ClipEdge): Effect? = if (ClipTransitionEffect.needed(edge)) ClipTransitionEffect(edge) else null
 
     /** Colour effects shared by photo and video clips (grade, then filter look). */
     private fun colorEffects(clip: Clip): List<Effect> = buildList {
@@ -142,7 +148,7 @@ object ProjectComposer {
     }
 
     /** A still photo shown for the clip's duration. Media3 does not apply EXIF, so we rotate it here. */
-    private fun imageItem(clip: Clip, outW: Int, outH: Int): EditedMediaItem {
+    private fun imageItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge): EditedMediaItem {
         val durationMs = clip.timelineDurationMs
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.parse(clip.uri))
@@ -153,6 +159,7 @@ object ProjectComposer {
             geometryEffect(clip, extraCwDegrees = clip.sourceRotation)?.let(::add)
             addAll(colorEffects(clip))
             add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
+            transitionEffect(edge)?.let(::add)
         }
         return EditedMediaItem.Builder(mediaItem)
             .setDurationUs(durationMs * 1000)
@@ -161,7 +168,7 @@ object ProjectComposer {
             .build()
     }
 
-    private fun videoItem(clip: Clip, outW: Int, outH: Int): EditedMediaItem {
+    private fun videoItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge): EditedMediaItem {
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.parse(clip.uri))
             .setClippingConfiguration(
@@ -178,6 +185,7 @@ object ProjectComposer {
             addAll(colorEffects(clip))
             // Every clip is fitted to the same output frame (letterboxed if needed).
             add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
+            transitionEffect(edge)?.let(::add)
         }
 
         val audio = buildList<AudioProcessor> {

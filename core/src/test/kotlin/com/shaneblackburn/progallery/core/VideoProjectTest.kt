@@ -6,7 +6,7 @@ import com.shaneblackburn.progallery.core.video.Fade
 import com.shaneblackburn.progallery.core.video.FadeCurve
 import com.shaneblackburn.progallery.core.video.TimedText
 import com.shaneblackburn.progallery.core.video.Transition
-import com.shaneblackburn.progallery.core.video.TransitionCurve
+import com.shaneblackburn.progallery.core.video.ClipEdge
 import com.shaneblackburn.progallery.core.video.TransitionType
 import com.shaneblackburn.progallery.core.video.VideoProject
 import kotlin.test.Test
@@ -129,23 +129,38 @@ class VideoProjectTest {
         assertTrue(p30.stepFrames(p30.durationMs, 10) < p30.durationMs)
     }
 
-    @Test fun blurZoomTransitionCurve() {
+    @Test fun perClipTransitionEdges() {
+        // Three 4 s clips: BLUR between 1&2, ZOOM between 2&3, plus a project fade-in.
         val p = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000), clip(3, 4_000)))
-            .setTransition(0, Transition(TransitionType.BLUR, 1_000))     // boundary at 4_000
-            .setTransition(1, Transition(TransitionType.ZOOM, 1_000))     // boundary at 8_000
-        assertTrue(TransitionCurve.needed(p))
-        // Peak blur exactly at the first boundary; zero far away.
-        assertEquals(1f, TransitionCurve.at(p, 4_000).blur, 1e-3f)
-        assertEquals(0f, TransitionCurve.at(p, 4_000).zoom)
-        assertTrue(TransitionCurve.at(p, 4_250).blur in 0.4f..0.6f, "half-way through the taper")
-        assertEquals(0f, TransitionCurve.at(p, 2_000).blur, "well before the boundary")
-        // Peak zoom at the second boundary.
-        assertEquals(1f, TransitionCurve.at(p, 8_000).zoom, 1e-3f)
-        // Fades don't register as blur/zoom, and blur/zoom don't darken the frame.
-        val fadeProj = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000)))
-            .setTransition(0, Transition(TransitionType.FADE_BLACK, 1_000))
-        assertTrue(!TransitionCurve.needed(fadeProj))
-        assertEquals(0f, com.shaneblackburn.progallery.core.video.FadeCurve.at(p, 4_000).first, "blur boundary is not a brightness dip")
+            .setTransition(0, Transition(TransitionType.BLUR, 1_000))
+            .setTransition(1, Transition(TransitionType.ZOOM, 1_000))
+            .copy(fadeIn = Fade(600))
+        assertTrue(p.hasAnyTransition())
+
+        // Clip 0: fade-in at its start (peak at t=0), blur-out at its end (peak at t=4000).
+        val e0 = p.clipEdge(0)
+        assertEquals(TransitionType.FADE_BLACK, e0.inType); assertEquals(600L, e0.inMs)
+        assertEquals(TransitionType.BLUR, e0.outType); assertEquals(500L, e0.outMs) // half of 1000
+        assertEquals(1f, e0.at(0).fade, 1e-3f)              // full fade-in at the very start
+        assertEquals(0f, e0.at(600).fade, 1e-3f)            // fade-in done
+        assertEquals(1f, e0.at(4_000).blur, 1e-3f)          // full blur at the boundary (clip end)
+        assertEquals(0f, e0.at(3_500).blur, 1e-3f)          // blur window just begins
+        assertTrue(e0.at(3_750).blur in 0.4f..0.6f)         // mid-taper
+
+        // Clip 1: blur-in at its start (the SAME boundary, peak at t=0), zoom-out at its end.
+        val e1 = p.clipEdge(1)
+        assertEquals(TransitionType.BLUR, e1.inType)
+        assertEquals(1f, e1.at(0).blur, 1e-3f)              // boundary blur also peaks on clip 2's first frame
+        assertEquals(TransitionType.ZOOM, e1.outType)
+        assertEquals(1f, e1.at(4_000).zoom, 1e-3f)
+
+        // Clip 2 (last): zoom-in at its start, nothing at its end (no fade-out set).
+        val e2 = p.clipEdge(2)
+        assertEquals(1f, e2.at(0).zoom, 1e-3f)
+        assertEquals(TransitionType.NONE, e2.outType)
+        assertTrue(!e2.at(4_000).isActive)
+
+        assertTrue(!VideoProject(listOf(clip(1, 4_000))).hasAnyTransition())
     }
 
     @Test fun moveClip() {

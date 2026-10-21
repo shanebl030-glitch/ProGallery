@@ -14,7 +14,6 @@ import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlaySettings
 import androidx.media3.effect.RgbMatrix
 import com.shaneblackburn.progallery.core.video.Clip
-import com.shaneblackburn.progallery.core.video.FadeCurve
 import com.shaneblackburn.progallery.core.video.TextAnimation
 import com.shaneblackburn.progallery.core.video.VideoFilter
 import com.shaneblackburn.progallery.core.video.VideoProject
@@ -102,28 +101,6 @@ class ClipColorMatrix(clip: Clip) : RgbMatrix {
 
     companion object {
         fun needed(clip: Clip) = clip.filter != VideoFilter.NONE && clip.filterIntensity > 0f
-    }
-}
-
-/**
- * Timeline fades and fade-through transitions, applied to the whole composition.
- * Times are measured from the first frame this effect sees, which is timeline 0.
- */
-@OptIn(UnstableApi::class)
-class TimelineFadeMatrix(private val project: VideoProject) : RgbMatrix {
-    private var firstUs = Long.MIN_VALUE
-    private val identity = ColorXform().toGl()
-
-    override fun getMatrix(presentationTimeUs: Long, useHdr: Boolean): FloatArray {
-        if (firstUs == Long.MIN_VALUE) firstUs = presentationTimeUs
-        val t = (presentationTimeUs - firstUs) / 1000
-        val (amount, white) = FadeCurve.at(project, t)
-        return if (amount <= 0f) identity else ColorXform.fade(amount, white).toGl()
-    }
-
-    companion object {
-        fun needed(p: VideoProject) = p.fadeIn != null || p.fadeOut != null ||
-            p.transitions.any { it.type != com.shaneblackburn.progallery.core.video.TransitionType.NONE }
     }
 }
 

@@ -11,27 +11,30 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.BaseGlShaderProgram
 import androidx.media3.effect.GlEffect
 import androidx.media3.effect.GlShaderProgram
-import com.shaneblackburn.progallery.core.video.TransitionCurve
-import com.shaneblackburn.progallery.core.video.VideoProject
+import com.shaneblackburn.progallery.core.video.ClipEdge
 
 /**
- * Time-windowed blur / zoom transitions at clip boundaries. Single-stream (no overlap),
- * so it works identically in the live preview and the export. The per-frame blur and zoom
- * strengths come from [TransitionCurve], which peaks at the boundary and tapers over the
- * transition's half-duration.
+ * Per-clip transition effect: fade (to black/white), blur and zoom applied in the clip's
+ * own time window(s). Applied as a clip effect (not a composition effect) because a
+ * composition effect receives per-clip timestamps that reset at each clip, so it can't tell
+ * where a boundary falls on the timeline. Each clip instead carries its own [ClipEdge],
+ * which knows the clip duration and the transitions at both ends.
+ *
+ * Placed last in a clip's video-effect list so the frame timestamps it sees are the clip's
+ * 0-based output time (after speed/trim), matching [ClipEdge].
  */
 @OptIn(UnstableApi::class)
-class TransitionGlEffect(private val project: VideoProject) : GlEffect {
+class ClipTransitionEffect(private val edge: ClipEdge) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        TransitionShaderProgram(project, useHdr)
+        ClipTransitionShaderProgram(edge, useHdr)
 
     companion object {
-        fun needed(project: VideoProject) = TransitionCurve.needed(project)
+        fun needed(edge: ClipEdge) = edge.isActive
     }
 }
 
 @OptIn(UnstableApi::class)
-private class TransitionShaderProgram(private val project: VideoProject, useHdr: Boolean) :
+private class ClipTransitionShaderProgram(private val edge: ClipEdge, useHdr: Boolean) :
     BaseGlShaderProgram(useHdr, 1) {
 
     private val program: GlProgram = try {
@@ -54,11 +57,13 @@ private class TransitionShaderProgram(private val project: VideoProject, useHdr:
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
         if (firstUs == Long.MIN_VALUE) firstUs = presentationTimeUs
         val tMs = (presentationTimeUs - firstUs) / 1000
-        val fx = TransitionCurve.at(project, tMs)
+        val fx = edge.at(tMs)
         try {
             program.use()
             program.setSamplerTexIdUniform("uTexSampler", inputTexId, 0)
             program.setFloatsUniform("uTexel", floatArrayOf(texelW, texelH))
+            program.setFloatUniform("uFade", fx.fade)
+            program.setFloatUniform("uWhite", if (fx.white) 1f else 0f)
             program.setFloatUniform("uBlur", fx.blur)
             program.setFloatUniform("uZoom", fx.zoom)
             program.bindAttributesAndUniforms()
@@ -83,8 +88,6 @@ void main() {
   vTex = vec2(aFramePosition.x * 0.5 + 0.5, aFramePosition.y * 0.5 + 0.5);
 }
 """
-        // Zoom: punch in toward the centre by up to 30% at the boundary.
-        // Blur: 9-tap average whose spread grows with the blur strength (up to ~6 texels).
         const val FRAGMENT = """
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -93,20 +96,22 @@ precision mediump float;
 #endif
 uniform sampler2D uTexSampler;
 uniform vec2 uTexel;
-uniform float uBlur;
-uniform float uZoom;
+uniform float uFade;   // 0..1 blend toward the fade colour
+uniform float uWhite;  // 1 = fade to white, 0 = to black
+uniform float uBlur;   // 0..1
+uniform float uZoom;   // 0..1
 varying vec2 vTex;
 
 void main() {
   vec2 uv = vTex;
   if (uZoom > 0.0) {
-    float scale = 1.0 + uZoom * 0.3;
+    float scale = 1.0 + uZoom * 0.3;        // punch in up to 30%
     uv = (uv - 0.5) / scale + 0.5;
   }
+  vec3 c;
   if (uBlur > 0.0) {
     vec2 s = uTexel * (uBlur * 6.0);
-    vec3 c = vec3(0.0);
-    c += texture2D(uTexSampler, uv).rgb * 0.25;
+    c  = texture2D(uTexSampler, uv).rgb * 0.25;
     c += texture2D(uTexSampler, uv + vec2( s.x, 0.0)).rgb * 0.125;
     c += texture2D(uTexSampler, uv + vec2(-s.x, 0.0)).rgb * 0.125;
     c += texture2D(uTexSampler, uv + vec2(0.0,  s.y)).rgb * 0.125;
@@ -115,10 +120,14 @@ void main() {
     c += texture2D(uTexSampler, uv + vec2(-s.x,  s.y)).rgb * 0.0625;
     c += texture2D(uTexSampler, uv + vec2( s.x, -s.y)).rgb * 0.0625;
     c += texture2D(uTexSampler, uv + vec2(-s.x, -s.y)).rgb * 0.0625;
-    gl_FragColor = vec4(c, 1.0);
   } else {
-    gl_FragColor = texture2D(uTexSampler, uv);
+    c = texture2D(uTexSampler, uv).rgb;
   }
+  if (uFade > 0.0) {
+    vec3 target = vec3(uWhite);
+    c = mix(c, target, uFade);
+  }
+  gl_FragColor = vec4(c, 1.0);
 }
 """
     }
