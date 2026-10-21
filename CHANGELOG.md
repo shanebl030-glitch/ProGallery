@@ -32,6 +32,8 @@ Personal-use build. Everything from 0.1.0 is unchanged.
 
 ### Changed
 - Version 0.2.0 (versionCode 2).
+- Video editor: Back first deselects the selected clip, title or music track instead of
+  jumping straight to the discard prompt.
 - Credit text corrected from "Created By" to "Created by".
 - Export-progress notification uses the monochrome icon (Android requires single-colour
   small icons).
@@ -43,6 +45,12 @@ Personal-use build. Everything from 0.1.0 is unchanged.
   (a CompositionPlayer accepts only one composition). Both found by the emulator tests.
 - Editor text and icons were too dark on the editors' near-black background (missing
   content colour); now readable.
+- Photo editor preview could lag far behind (or appear stuck) right after choosing a
+  filter: the pixel pipeline looked up a thread-local buffer for every pixel, and the
+  filter-thumbnail strip competed with the preview for the same small thread pool. Now
+  each row uses its own scratch buffer and thumbnails render on a single thread. Found
+  through render-timing logs from the emulator tests; a core test confirms serial and
+  parallel rendering give identical pixels.
 - Video preview no longer goes black after an edit while paused.
 - Editor tool panels (photo and video) are height-limited and scroll, so tall panels such
   as Text no longer squeeze the preview and timeline.

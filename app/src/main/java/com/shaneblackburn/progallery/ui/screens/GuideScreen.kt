@@ -53,7 +53,7 @@ private val GUIDE: List<Pair<String, List<String>>> = listOf(
     ),
     "Editing videos" to listOf(
         "Open a video and tap the pencil. Your original video is never changed; the result is saved as a new video.",
-        "Scroll the timeline to move the playhead. Tap a clip to select it, then drag its edges to trim.",
+        "Scroll the timeline to move the playhead. Tap a clip to select it, then drag its edges to trim. Back deselects.",
         "Clip tools: split at the playhead, speed (0.25× to 4×, voice pitch kept), volume or mute, rotate, flip, colour, filters, and move earlier or later.",
         "Add clip joins more videos. Tap the dot between two clips for a fade-through-black or white transition.",
         "Text adds a timed title; Music adds a background track with volume, loop and fades; Frame changes the shape (1:1, 9:16, 16:9, 4:5); fades in from or out to black or white.",

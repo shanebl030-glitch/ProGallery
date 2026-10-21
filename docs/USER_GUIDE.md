@@ -53,6 +53,8 @@ The same content is available inside the app under **Library → Settings → Us
 - Open a video and tap the **pencil**. The original is never changed; the result is
   saved as a new video (`name_edited.mp4`) next to it.
 - Scroll the **timeline** to move the playhead; zoom with the magnifier buttons.
+- Press **Back** to deselect a clip, title or music track (Back again offers to discard
+  unsaved edits).
 - Tap a **clip** to select it, drag its edges to **trim**. Clip tools: **Split** at the
   playhead, **Speed** 0.25×–4× (pitch preserved), **Audio** volume/mute, **Rotate**,
   **Flip**, **Colour** (brightness, contrast, saturation, warmth), **Filter**, move

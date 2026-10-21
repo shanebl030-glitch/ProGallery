@@ -32,21 +32,21 @@ class EditorUiTest {
         val beforeEdit = Shots.take("20_photo_editor_adjust")
 
         ui.tapText("Filters")
-        ui.tapText("Warm")
-        // The preview must visibly warm up (red up / blue down) once the background render lands.
-        val before = Shots.brightnessRgb(beforeEdit!!, 0.2f, 0.55f)
+        ui.tapTextScrolling("Mono")
+        // The preview must turn monochrome once the background render lands
+        // (photo pixels' colour spread collapses to ~0).
+        val before = Shots.colourSpread(beforeEdit!!, 0.12f, 0.6f)
         var after = before
-        var warmShift = 0.0
         val deadline = System.currentTimeMillis() + 30_000
         while (System.currentTimeMillis() < deadline) {
-            Thread.sleep(2000)
-            after = Shots.brightnessRgb(Shots.take("21_photo_editor_filter")!!, 0.2f, 0.55f)
-            warmShift = (after[0] - before[0]) - (after[2] - before[2])
-            if (warmShift > 4.0) break
+            Thread.sleep(1500)
+            after = Shots.colourSpread(Shots.take("21_photo_editor_filter")!!, 0.12f, 0.6f)
+            if (after < before * 0.25) break
         }
-        android.util.Log.i("EditorUiTest", "preview mean RGB before=${before.toList()} after=${after.toList()} warmShift=$warmShift")
-        if (warmShift <= 4.0) dumpThreads("21_threads_after_filter")
-        assertTrue(warmShift > 4.0, "preview updates after Warm filter (R-B shift $warmShift)")
+        android.util.Log.i("EditorUiTest", "preview colour spread before=$before after=$after")
+        if (after >= before * 0.25) dumpThreads("21_threads_after_filter")
+        assertTrue(before > 20.0, "colourful photo shown before editing (spread $before)")
+        assertTrue(after < before * 0.25, "preview turns monochrome after Mono filter (spread $before -> $after)")
 
         ui.tapText("Crop")
         ui.tapText("1:1")
@@ -89,9 +89,10 @@ class EditorUiTest {
         val previewLevel = Shots.brightness(shot, 0.22f, 0.38f)
         assertTrue(previewLevel > 25.0, "preview shows a frame after an edit (brightness $previewLevel)")
         // Then fade in from black (frame at 0:00 is legitimately black after this).
-        ui.back() // deselect text so project tools show
-        if (!ui.has(By.text("Fade in from black"), 2_000)) ui.tapText("Add clip").also { ui.back() }
-        ui.tapTextScrolling("Fade in from black")
+        ui.back() // first Back deselects the title, showing the project tools again
+        assertTrue(ui.has(By.text("Fade in from black"), 5_000), "Back deselects and shows project tools")
+        assertTrue(!ui.has(By.text("Discard"), 500), "Back with a selection doesn't offer to discard")
+        ui.tapText("Fade in from black")
 
         ui.text("Export").click()
         ui.text("Export video")

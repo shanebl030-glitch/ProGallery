@@ -62,9 +62,13 @@ class GalleryUiTest {
         ui.tapDesc("Settings")
         ui.text("Settings")
         // Scroll the settings list to the bottom to reach About and the footer credit.
-        repeat(4) { ui.device.swipe(ui.device.displayWidth / 2, ui.device.displayHeight * 3 / 4, ui.device.displayWidth / 2, ui.device.displayHeight / 4, 20) }
-        assertTrue(ui.has(By.textContains(AppInfo.AUTHOR_CREDIT)), "credit in Settings footer")
+        var found = false
+        for (i in 0 until 10) {
+            if (ui.has(By.textContains(AppInfo.AUTHOR_CREDIT), 800)) { found = true; break }
+            ui.device.swipe(ui.device.displayWidth / 2, ui.device.displayHeight * 3 / 4, ui.device.displayWidth / 2, ui.device.displayHeight / 4, 30)
+        }
         Shots.take("05_settings_footer")
+        assertTrue(found, "credit in Settings footer")
         ui.tapText("About ProGallery")
         // Exact, case-sensitive match on the About screen.
         val credit = ui.text("Created by Shane BlackbuRn")

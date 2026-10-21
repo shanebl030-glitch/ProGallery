@@ -174,6 +174,23 @@ object Shots {
         return DoubleArray(3) { if (n == 0) 0.0 else Math.round(sum[it] / n * 10) / 10.0 }
     }
 
+    /**
+     * Mean colour spread (max - min channel) of the photo pixels in a band, skipping the
+     * editor's near-black background. ~0 for a monochrome image.
+     */
+    fun colourSpread(bmp: Bitmap, top: Float, bottom: Float): Double {
+        var sum = 0L; var n = 0
+        for (y in (bmp.height * top).toInt() until (bmp.height * bottom).toInt() step 4) {
+            for (x in 0 until bmp.width step 4) {
+                val p = bmp.getPixel(x, y)
+                val r = (p shr 16) and 255; val g = (p shr 8) and 255; val b = p and 255
+                if (r + g + b < 120) continue // editor background / letterbox
+                sum += maxOf(r, g, b) - minOf(r, g, b); n++
+            }
+        }
+        return if (n == 0) 0.0 else sum.toDouble() / n
+    }
+
     /** Mean brightness (0..255) of a horizontal band of a screenshot, as fractions of height. */
     fun brightness(bmp: Bitmap, top: Float, bottom: Float): Double {
         var sum = 0L; var n = 0

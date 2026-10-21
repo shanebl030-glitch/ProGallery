@@ -160,6 +160,7 @@ private fun VideoEditorContent(item: MediaItem, onClose: () -> Unit) {
     BackHandler {
         when {
             exportState is ExportState.Running -> showExport = true
+            selection != null -> selection = null // first Back closes the clip/title/music tools
             history.canUndo -> confirmDiscard = true
             else -> onClose()
         }
