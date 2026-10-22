@@ -315,3 +315,34 @@ unreliable.
   "passes through black" group with Fade-black/Wipe/Iris. Updated the in-app guide line to match.
 - Bumped to versionCode 13 / versionName 0.4.7. Next: push, re-run device tests to confirm a clean
   pass, then sign + deliver only if it passes; report the real result either way.
+
+## 2026-10-23 — Session 15 (v0.4.8, timeline/preview synchronisation)
+- Shane reported timeline playhead vs preview out of sync even on a single uncut clip with no
+  transitions → investigate the real root cause, not a visual workaround.
+- Traced the whole path. RULED OUT (verified correct): core time model (durationMs/clipStarts/
+  locate/stepFrames); ProjectComposer setDurationUs (checked against Media3 1.5.1 source — durationUs
+  must be the full pre-clip duration; clipping is subtracted, and it's ignored for encoded video, so
+  the current value is correct and must NOT be changed or the export breaks); timeline geometry
+  (centre playhead + leading half-viewport spacer => time = scroll/pxPerMs, matches the mapping).
+- FOUND + FIXED runtime coordination defects in VideoEditorScreen:
+  (1) pause/stop didn't snap the playhead to the player's exact position (follow loop sampled on a
+      timer) -> on stop it now reads currentPosition exactly and aligns scroll;
+  (2) follow loop used delay(33) -> now vsync-aligned via withFrameMillis so the playhead tracks the
+      preview smoothly;
+  (3) added SeekParameters.EXACT to the ExoPlayer fallback for frame-accurate scrub/step;
+  (4) new core TimelineMath (scrollPxForMs / msForScrollPx) is now the single source of truth for the
+      time<->pixel maths used by the follow loop, scrub handler and seek path.
+- Tests: 89 core unit tests (new TimelineMathTest: round-trip/no-drift, clamp, zoom-invariance,
+  frame-step reversible/speed/clamp, single-clip locate). New PlaybackSyncDeviceTest drives the real
+  CompositionPlayer on one clip and asserts position is seek-accurate, stable when paused, advances
+  while playing, and ends on the last of rapid seeks (verifies the position VALUE the UI reads; a pure
+  visual render-lag is for the device to confirm).
+- CI: device-tests.sh now runs Gradle --no-daemon and hard-kills at the cap (-k 120) so reports +
+  artifacts upload even when the software-GL emulator overruns (the df6e8f1 blur run died with the
+  test step stuck "in progress" and uploaded nothing).
+- Note: the v0.4.7 blur device run (df6e8f1) did NOT complete — the emulator job overran its 85-min
+  cap, so the dense-Gaussian blur + whip/push test fixes remain unverified on-device (not failed).
+  v0.4.8 carries both the blur (0.4.7) and sync (0.4.8) changes; the re-run covers both.
+- Bumped to versionCode 14 / versionName 0.4.8. Next: push, let CI build+unit+lint+assemble verify
+  compilation, download the release APK, sign with the permanent key, androguard-verify, deliver;
+  report device-test outcome honestly; Shane verifies sync on his Fold5.

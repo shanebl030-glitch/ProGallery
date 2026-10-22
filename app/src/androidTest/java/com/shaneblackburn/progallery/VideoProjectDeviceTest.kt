@@ -452,4 +452,67 @@ class VideoProjectDeviceTest {
         error?.let { throw AssertionError("preview failed: ${it.errorCodeName}", it) }
         assertTrue(ready, "preview never became ready")
     }
+
+    /**
+     * Timeline/preview synchronisation at the engine level: the CompositionPlayer's OWN reported
+     * duration and post-seek position must match the project timeline that the editor's playhead,
+     * timecode and timeline scrolling are all computed from ([VideoProject.durationMs]). If the
+     * preview timeline is longer/shorter than the project timeline, or a seek lands somewhere other
+     * than asked, the playhead and the shown frame drift apart. Checked for a single uncut clip
+     * (the baseline Shane reported) and a trimmed clip (where a wrong duration contract would bite).
+     */
+    @Test fun previewTimelineMatchesProjectTimeline() {
+        val base = videoClip()
+        val trim = minOf(1_000L, base.sourceDurationMs / 4)
+        val cases = listOf(
+            "uncut" to VideoProject(listOf(base)),
+            "trimmed" to VideoProject(listOf(base.copy(trimStartMs = trim, trimEndMs = base.sourceDurationMs - trim))),
+        )
+        val failures = mutableListOf<String>()
+        for ((label, project) in cases) {
+            val timeline = project.durationMs
+            val readyLatch = CountDownLatch(1)
+            var err: PlaybackException? = null
+            var player: CompositionPlayer? = null
+            instrumentation.runOnMainSync {
+                val pl = CompositionPlayer.Builder(ctx).build()
+                player = pl
+                pl.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(s: Int) { if (s == Player.STATE_READY) readyLatch.countDown() }
+                    override fun onPlayerError(e: PlaybackException) { err = e; readyLatch.countDown() }
+                })
+                pl.setComposition(ProjectComposer.build(project))
+                pl.prepare()
+            }
+            if (!readyLatch.await(30, TimeUnit.SECONDS)) { failures += "$label: never ready"; instrumentation.runOnMainSync { player?.release() }; continue }
+            err?.let { failures += "$label: preview error ${it.errorCodeName}"; instrumentation.runOnMainSync { player?.release() }; continue }
+
+            var reportedDur = 0L
+            val target = timeline / 2
+            var posAfterSeek = 0L
+            val seekLatch = CountDownLatch(1)
+            instrumentation.runOnMainSync {
+                reportedDur = player!!.duration // ms, or C.TIME_UNSET if unknown
+                player!!.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(s: Int) { if (s == Player.STATE_READY) seekLatch.countDown() }
+                })
+                player!!.seekTo(target)
+            }
+            seekLatch.await(15, TimeUnit.SECONDS)
+            instrumentation.runOnMainSync { posAfterSeek = player!!.currentPosition; player!!.release() }
+
+            // The player's own duration must equal the project timeline the playhead uses.
+            if (reportedDur == androidx.media3.common.C.TIME_UNSET) {
+                failures += "$label: player reported no duration (C.TIME_UNSET); the playhead can't be mapped to it"
+            } else if (abs(reportedDur - timeline) > 300) {
+                failures += "$label: player duration $reportedDur ms vs project timeline $timeline ms (playhead would drift)"
+            }
+            // A seek must land where asked (±300 ms), or the shown frame won't match the playhead.
+            if (abs(posAfterSeek - target) > 300) {
+                failures += "$label: seek to $target landed at $posAfterSeek ms"
+            }
+            android.util.Log.i("VideoProjectDeviceTest", "sync $label: timeline=$timeline playerDur=$reportedDur seekTarget=$target seekPos=$posAfterSeek")
+        }
+        assertTrue(failures.isEmpty(), "preview/timeline out of sync:\n" + failures.joinToString("\n"))
+    }
 }

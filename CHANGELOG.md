@@ -2,6 +2,48 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.8] — 2026-10-23 — timeline/preview synchronisation
+
+Shane reported the timeline playhead and the video preview drifting out of sync even on a single,
+uncut clip with no transitions. Full trace of the playback/seek/timeline path below.
+
+### Root-cause investigation (what I checked)
+- **Core time model** (`VideoProject`): `durationMs = Σ timelineDurationMs`, cumulative `clipStarts`,
+  `locate` and `stepFrames` (real `frameRate`/`speed`) — all internally consistent. Pinned by new
+  unit tests. Not the cause.
+- **Composition time base** (`ProjectComposer`): verified `setDurationUs(sourceDurationMs)` against
+  the Media3 1.5.1 contract — `durationUs` must be the FULL pre-clip duration (the clipping config
+  is subtracted to get the presentation length, and it's ignored outright for encoded video). So it
+  is correct; changing it would have been wrong and would have risked the working export. Not the
+  cause.
+- **Timeline geometry** (`VideoTimeline`): playhead fixed at centre, content has a leading
+  half-viewport spacer, so time-under-playhead = `scroll/pxPerMs`, which exactly matches the
+  position↔scroll mapping. No half-viewport offset. Not the cause.
+
+### Fixed — runtime playback/playhead coordination
+- **Pause/stop now snaps the playhead to the player's exact position.** The follow loop sampled the
+  player on a timer, so when playback stopped the playhead/timecode could sit up to one sample
+  behind the frozen frame. On stop it now reads the exact position and aligns the scroll.
+- **The follow loop is vsync-aligned** (`withFrameMillis`) instead of a fixed 33 ms timer, so the
+  playhead tracks the continuously-rendered preview smoothly instead of stepping behind it.
+- **Frame-accurate seeking** on the fallback/Safe-mode player (`SeekParameters.EXACT`) so scrub and
+  frame-step land on the exact frame, not the nearest sync sample.
+- **One source of truth for the time↔pixel maths** (new `TimelineMath`): the follow loop, the scrub
+  handler and the seek/frame-step path now all convert through the same functions, so they cannot
+  diverge. (The maths was already equivalent; this prevents a future regression.)
+
+### Testing
+- **89 core unit tests** (added `TimelineMathTest`: ms↔scroll round-trips with no growing offset,
+  clamping, zoom-invariance, frame-step reversibility/speed/clamp, single-clip locate).
+- **New on-device test** `PlaybackSyncDeviceTest` drives the real `CompositionPlayer` on one clip and
+  asserts the reported position is seek-accurate, stable while paused, advances while playing, and
+  ends on the last of several rapid seeks. Scope: it verifies the position VALUE the UI reads; a
+  purely visual render-lag can only be confirmed on a real device.
+- CI reliability: the device-test step now runs Gradle daemonless and is hard-killed at its cap, so
+  reports and artifacts upload even when the (software-GL) emulator overruns.
+- **Honest status:** the fixes target concrete, identified defects and pass the unit suite; final
+  confirmation of on-screen sync is for Shane's Galaxy Z Fold5, as requested.
+
 ## [0.4.7] — 2026-10-23 — blur quality + first clean on-device transition run
 
 The CI emulator came back, so for the first time every one of the 15 transitions was exported on a

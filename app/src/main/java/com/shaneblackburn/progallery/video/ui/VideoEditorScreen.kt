@@ -58,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -76,17 +77,20 @@ import com.shaneblackburn.progallery.R
 import com.shaneblackburn.progallery.core.format.Formatters
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.video.TimedText
+import com.shaneblackburn.progallery.core.video.TimelineMath
 import com.shaneblackburn.progallery.ui.theme.ProGalleryTheme
 import com.shaneblackburn.progallery.ui.theme.ThemeMode
 import com.shaneblackburn.progallery.video.ExportState
 import com.shaneblackburn.progallery.video.PreviewController
 import com.shaneblackburn.progallery.video.VideoEditorViewModel
 import com.shaneblackburn.progallery.video.VideoExportSettings
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.sample
 import kotlin.math.roundToInt
 
 /** How the video editor was opened. */
@@ -137,6 +141,14 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     var pxPerMs by remember { mutableFloatStateOf(0.06f) } // 60 px per second
     var positionMs by remember { mutableLongStateOf(0L) }
     var playing by remember { mutableStateOf(false) }
+    // True only while the user is dragging the timeline (not during programmatic scrolls).
+    var scrubbing by remember { mutableStateOf(false) }
+    // Set while the app scrolls the timeline itself (playback follow / explicit seek) so those
+    // scrolls are not mistaken for a user scrub — which would quantise the frame-accurate
+    // position to a pixel boundary and fight the real source of truth.
+    var programmaticScroll by remember { mutableStateOf(false) }
+    // Latest-wins, throttled seek target for the heavy CompositionPlayer.seekTo (see below).
+    val pendingSeekMs = remember { MutableStateFlow(-1L) }
     var previewError by remember { mutableStateOf<String?>(null) }
     var simplifiedPreview by remember { mutableStateOf(false) }
     var fallbackReason by remember { mutableStateOf<String?>(null) }
@@ -207,20 +219,56 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
         val p = vm.project
         if (p.clips.isNotEmpty() && p.clips.none { it.uri in vm.missing.value }) preview.show(p, positionMs)
     }
-    // Keep the timeline under the playhead while playing.
+    // The playhead position (positionMs) is the single source of truth for the preview frame,
+    // the timecode and where the timeline is scrolled. It is written by exactly one driver at a
+    // time: the player while playing, the user while scrubbing, or an explicit seek/frame-step.
+    //
+    // Heavy seeks (CompositionPlayer.seekTo rebuilds the decode pipeline) are throttled and
+    // latest-wins: while scrubbing we push targets here and seek at most ~16×/s to the newest one,
+    // so a fast drag can't flood the player and leave the preview lagging on stale frames. The
+    // final resting frame is always seeked exactly when the drag ends.
+    LaunchedEffect(Unit) {
+        pendingSeekMs.filter { it >= 0 }.sample(60).collect { preview.seekTo(it) }
+    }
+    // While playing, the player's clock is the single source of truth: follow its position on
+    // every animation frame (vsync-aligned, not a fixed 33 ms timer) so the playhead and timecode
+    // stay locked to the preview the user actually sees. When playback stops (pause or end), snap
+    // once to the player's exact final position — the follow loop can otherwise be up to one frame
+    // behind at the instant isPlaying flips, which would leave the playhead and the frozen preview
+    // frame slightly apart. This LaunchedEffect re-runs whenever `playing` changes.
     LaunchedEffect(playing) {
-        while (playing) {
-            positionMs = preview.currentPositionMs
-            scroll.scrollTo((positionMs * pxPerMs).roundToInt())
-            delay(33)
+        if (playing) {
+            while (playing) {
+                withFrameMillis { } // wait for the next frame, then sample the player
+                positionMs = preview.currentPositionMs.coerceIn(0, maxOf(0, project.durationMs))
+                programmaticScroll = true
+                scroll.scrollTo(TimelineMath.scrollPxForMs(positionMs, pxPerMs))
+                programmaticScroll = false
+            }
+        } else if (!scrubbing) {
+            // Stopped and the user isn't dragging: align exactly to where the player really is.
+            positionMs = preview.currentPositionMs.coerceIn(0, maxOf(0, project.durationMs))
+            programmaticScroll = true
+            scroll.scrollTo(TimelineMath.scrollPxForMs(positionMs, pxPerMs))
+            programmaticScroll = false
         }
     }
-    // Scrubbing: user scrolls the timeline → seek.
+    // While the user drags the timeline, the scroll drives: move the playhead with the finger
+    // immediately (zero lag) and throttle the actual preview seek. A programmatic scroll (the
+    // playback follow above, or an explicit seek below) is ignored here so it can't overwrite a
+    // frame-accurate position with a pixel-rounded one.
     LaunchedEffect(pxPerMs) {
         snapshotFlow { scroll.value to scroll.isScrollInProgress }.collect { (v, active) ->
-            if (active && !playing) {
-                positionMs = (v / pxPerMs).toLong().coerceIn(0, maxOf(0, vm.project.durationMs))
-                preview.seekTo(positionMs)
+            when {
+                active && !playing && !programmaticScroll -> {
+                    scrubbing = true
+                    positionMs = TimelineMath.msForScrollPx(v, pxPerMs, vm.project.durationMs)
+                    pendingSeekMs.value = positionMs
+                }
+                !active && scrubbing -> {
+                    scrubbing = false
+                    preview.seekTo(positionMs) // land exactly on the resting frame
+                }
             }
         }
     }
@@ -303,7 +351,11 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
         val seekTo: (Long) -> Unit = { ms ->
             positionMs = ms.coerceIn(0, maxOf(0, project.durationMs))
             preview.seekTo(positionMs)
-            scope.launch { scroll.scrollTo((positionMs * pxPerMs).roundToInt()) }
+            scope.launch {
+                programmaticScroll = true
+                scroll.scrollTo(TimelineMath.scrollPxForMs(positionMs, pxPerMs))
+                programmaticScroll = false
+            }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {

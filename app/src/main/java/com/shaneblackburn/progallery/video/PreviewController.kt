@@ -9,6 +9,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.transformer.CompositionPlayer
 import androidx.media3.ui.PlayerView
 import com.shaneblackburn.progallery.CrashReporter
@@ -138,6 +139,9 @@ class PreviewController(
         if (project.clips.isEmpty()) { onError(cause?.let { diagnose(project, it) }); return false }
         return try {
             val exo = ExoPlayer.Builder(context).build()
+            // Frame-accurate seeking so scrubbing and frame-step land on the exact frame the
+            // playhead points at (the default snaps to the nearest sync sample).
+            exo.setSeekParameters(SeekParameters.EXACT)
             exo.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) = onPlayingChanged(isPlaying)
                 override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) onReady() }

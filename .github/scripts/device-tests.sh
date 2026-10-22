@@ -10,12 +10,15 @@ adb logcat -v time > "$OUT/logcat_live.txt" 2>/dev/null &
 LOGCAT_PID=$!
 # Per-test limit (5 min) and an overall cap below the CI step timeout, so reports,
 # screenshots and logs are always collected even if a test hangs.
-timeout --signal=TERM 2700 ./gradlew :app:connectedDebugAndroidTest \
+# --no-daemon so the test process is killable; -k sends SIGKILL 120s after SIGTERM so a stuck
+# Gradle/emulator can't blow past the step timeout and skip report + artifact upload (which is
+# what left an earlier run with no device-out at all).
+timeout --signal=TERM -k 120 2700 ./gradlew :app:connectedDebugAndroidTest --no-daemon \
   -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
   -Pandroid.testInstrumentationRunnerArguments.timeout_msec=300000 \
   --stacktrace > "$OUT/device-test.log" 2>&1
 CODE=$?
-[ $CODE -eq 124 ] && echo "TIMED OUT after 38 min" >> "$OUT/device-test.log"
+[ $CODE -eq 124 ] && echo "TIMED OUT after 45 min" >> "$OUT/device-test.log"
 echo $CODE > "$OUT/exit_code"
 kill $LOGCAT_PID 2>/dev/null
 # Last test the runner started (helps when it hung).
