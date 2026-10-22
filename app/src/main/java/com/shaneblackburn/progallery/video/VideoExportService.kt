@@ -51,10 +51,12 @@ class VideoExportService : Service() {
         try {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(0f, "Preparing…", ongoing = true), type)
         } catch (e: Exception) {
-            // The OS can still refuse the foreground start (e.g. per-type quotas/state on newer
-            // Android). Never crash: the export itself runs in-process and its progress still shows
-            // inside the app, so we just drop the background notification.
-            android.util.Log.w(TAG, "foreground export service refused; export continues in-app", e)
+            // The OS refused the foreground start (e.g. the app went to the background, or a
+            // per-type quota on newer Android). Without a foreground service the export can't be
+            // relied on to finish — the process may be killed — so we don't pretend it continues:
+            // stop the export cleanly and ask the user to retry with the app open. Never crash.
+            android.util.Log.w(TAG, "foreground export service refused; stopping export cleanly", e)
+            manager.failBackgroundRefused()
             stopSelf(startId)
             return START_NOT_STICKY
         }

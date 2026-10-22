@@ -124,6 +124,22 @@ class VideoExportManager(private val context: Context) {
         }
     }
 
+    /**
+     * Called when the OS won't let the export run as a foreground service (typically because the
+     * app is in the background). A background export can't be relied on to finish under Android's
+     * execution rules, so stop it cleanly and tell the user to retry rather than leave a half-done
+     * export running unreliably.
+     */
+    fun failBackgroundRefused() {
+        main.post {
+            runCatching { transformer?.cancel() }
+            transformer = null
+            tempFile?.delete()
+            if (isRunning) _state.value =
+                ExportState.Failed("Export needs ProGallery open. Please reopen the app and export the video again.")
+        }
+    }
+
     /** Clears a finished/failed/cancelled state once the UI has shown it. */
     fun acknowledge() {
         if (!isRunning) _state.value = ExportState.Idle

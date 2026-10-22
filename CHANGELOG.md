@@ -24,11 +24,14 @@ crashed on the Fold5.
 - The export service now **only goes foreground while an export is actually running**
   (`ExportServicePolicy.shouldRunForeground`). A background/system restart of the service now stops
   quietly instead of calling `startForeground()` from the background.
-- `startForeground()` is wrapped so an OS refusal can **never crash the app** — the export runs
-  in-process and its progress still shows inside the app, so at worst the background notification is
-  dropped, not the export.
+- `startForeground()` is wrapped so an OS refusal can **never crash the app**. Because a video
+  export can't be relied on to finish without a foreground service (the OS may kill a backgrounded
+  process), a refusal now **stops the export cleanly and asks the user to reopen the app and export
+  again** — rather than pretending it continues in the background.
 - Starting the service from `VideoExportManager` is likewise guarded, so a refused start can't crash
   the export either.
+- Normal exports are started from the foreground (the user taps Export), where the foreground
+  service is permitted, so they run and save as before — this only affects the rare refusal case.
 
 ### Testing
 - **83 core + app unit tests** (added `ExportServicePolicyTest`, which locks in "foreground only
