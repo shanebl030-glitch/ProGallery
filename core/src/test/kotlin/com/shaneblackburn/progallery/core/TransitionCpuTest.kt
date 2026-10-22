@@ -135,6 +135,36 @@ class TransitionCpuTest {
         }
     }
 
+    @Test fun spinPixelateShakeRippleTransform() {
+        val id = TransitionUniforms.IDENTITY
+        // Spin rotates and zooms a little so the corners don't show black.
+        val spin = sample(TransitionType.SPIN, 1f)
+        assertTrue(spin.rotate != 0f && spin.scale > 1f, "spin rotates + zooms")
+        assertTrue(meanAbsDiff(spin, id) > 0.03f, "spin changes the frame")
+        // Spin direction flips the rotation sign.
+        assertTrue(
+            sample(TransitionType.SPIN, 1f, dir = TransitionDirection.LEFT).rotate *
+                sample(TransitionType.SPIN, 1f, dir = TransitionDirection.RIGHT).rotate < 0f,
+            "left/right spin opposite ways",
+        )
+        // Pixelate quantises into blocks.
+        val pix = sample(TransitionType.PIXELATE, 1f)
+        assertTrue(pix.pixel > 0f)
+        assertTrue(meanAbsDiff(pix, id) > 0.005f, "pixelate changes the frame")
+        // Shake jitters the frame.
+        val shake = sample(TransitionType.SHAKE, 1f)
+        assertTrue(shake.shake > 0f)
+        assertTrue(meanAbsDiff(shake, id) > 0.01f, "shake displaces the frame")
+        // Ripple warps the frame.
+        val rip = sample(TransitionType.RIPPLE, 1f)
+        assertTrue(rip.ripple > 0f)
+        assertTrue(meanAbsDiff(rip, id) > 0.005f, "ripple warps the frame")
+        // All are a no-op at the endpoints.
+        for (t in listOf(TransitionType.SPIN, TransitionType.PIXELATE, TransitionType.SHAKE, TransitionType.RIPPLE)) {
+            assertTrue(sample(t, 0f).isIdentity, "$t is identity at edge 0")
+        }
+    }
+
     @Test fun crossDissolveIsNotRenderablePerClip() {
         // The per-clip pipeline must treat the cross-clip dissolve as inactive (never a black frame).
         val s = TransitionSample(TransitionType.CROSS_DISSOLVE, 1f, incoming = false)

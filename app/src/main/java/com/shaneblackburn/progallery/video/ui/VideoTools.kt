@@ -249,18 +249,10 @@ fun TransitionTools(
         // Animated demo of the current choice (or the two clips cutting, for Standard cut).
         TransitionDemo(current, Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
 
-        TransitionFamily.entries.forEach { fam ->
-            val types = TransitionType.selectable.filter { it.family == fam }
-            if (types.isEmpty()) return@forEach
-            Text(fam.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 16.dp, top = 6.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                types.forEach { t -> TransitionCard(t, selected = current.type == t, onPick = { onSet(pick(t, current)) }) }
-            }
-        }
-
+        // Controls for the SELECTED transition, shown right under the preview so the duration
+        // control is always visible (not buried below the picker).
         if (current.type != TransitionType.NONE) {
+            DurationControl(current, onSet)
             val dirs = current.type.directions()
             if (dirs.isNotEmpty()) {
                 ChipRow {
@@ -280,14 +272,42 @@ fun TransitionTools(
                     }
                 }
             }
-            ChipRow {
-                Text("Length", style = MaterialTheme.typography.labelLarge)
-                listOf(300L, 600L, 1000L, 1500L, 2000L).forEach { d ->
-                    FilterChip(selected = current.durationMs == d, onClick = { onSet(current.copy(durationMs = d)) },
-                        label = { Text(String.format(Locale.ROOT, "%.1f s", d / 1000f)) })
-                }
+        }
+
+        Text("Choose a transition", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+        TransitionFamily.entries.forEach { fam ->
+            val types = TransitionType.selectable.filter { it.family == fam }
+            if (types.isEmpty()) return@forEach
+            Text(fam.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                types.forEach { t -> TransitionCard(t, selected = current.type == t, onPick = { onSet(pick(t, current)) }) }
             }
         }
+    }
+}
+
+/** A labelled duration slider (0.2–3.0 s) that commits once, on release (no undo spam). */
+@Composable
+private fun DurationControl(current: Transition, onSet: (Transition) -> Unit) {
+    var dragMs by remember(current.type) { mutableStateOf(current.durationMs.toFloat()) }
+    LaunchedEffect(current.durationMs) { dragMs = current.durationMs.toFloat() }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Length", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(String.format(Locale.ROOT, "%.1f s", dragMs / 1000f),
+                style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+        androidx.compose.material3.Slider(
+            value = dragMs.coerceIn(Transition.MIN_MS.toFloat(), Transition.MAX_MS.toFloat()),
+            onValueChange = { dragMs = it },
+            onValueChangeFinished = {
+                onSet(current.copy(durationMs = dragMs.roundToInt().toLong().coerceIn(Transition.MIN_MS, Transition.MAX_MS)))
+            },
+            valueRange = Transition.MIN_MS.toFloat()..Transition.MAX_MS.toFloat(),
+        )
     }
 }
 

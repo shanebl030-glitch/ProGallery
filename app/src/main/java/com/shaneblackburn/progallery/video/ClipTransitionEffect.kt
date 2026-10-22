@@ -72,6 +72,10 @@ private class ClipTransitionShaderProgram(private val edge: ClipEdge, useHdr: Bo
             program.setFloatUniform("uLeak", u.leak)
             program.setFloatsUniform("uLeakPos", floatArrayOf(u.leakX, u.leakY))
             program.setFloatUniform("uGlitch", u.glitch)
+            program.setFloatUniform("uRotate", u.rotate)
+            program.setFloatUniform("uPixel", u.pixel)
+            program.setFloatUniform("uShake", u.shake)
+            program.setFloatUniform("uRipple", u.ripple)
             program.setFloatUniform("uSeed", seed)
             program.bindAttributesAndUniforms()
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -115,6 +119,10 @@ uniform float uCoverAngle;
 uniform float uLeak;
 uniform vec2 uLeakPos;
 uniform float uGlitch;
+uniform float uRotate;
+uniform float uPixel;
+uniform float uShake;
+uniform float uRipple;
 uniform float uSeed;
 varying vec2 vTex;
 
@@ -142,7 +150,25 @@ vec3 sampleBlur(vec2 uv) {
 
 void main() {
   vec2 p = vTex;
-  vec2 uv = (p - 0.5) / uScale + 0.5 - uOff;
+  vec2 d = p - 0.5;
+  if (uRotate != 0.0) {
+    float cs = cos(uRotate); float sn = sin(uRotate);
+    d = vec2(d.x * cs - d.y * sn, d.x * sn + d.y * cs);
+  }
+  vec2 uv = d / uScale + 0.5 - uOff;
+  if (uShake > 0.0) {
+    uv.x += (hashf(floor(uSeed) * 3.1) - 0.5) * uShake;
+    uv.y += (hashf(floor(uSeed) * 5.7 + 1.3) - 0.5) * uShake;
+  }
+  if (uRipple > 0.0) {
+    float phase = uSeed * 0.6;
+    float du = sin(uv.y * 22.0 + phase) * uRipple;
+    float dv = sin(uv.x * 22.0 + phase * 1.3) * uRipple;
+    uv.x += du; uv.y += dv;
+  }
+  if (uPixel > 0.0) {
+    uv = (floor(uv / uPixel) + 0.5) * uPixel;
+  }
   if (uGlitch > 0.0) {
     float band = floor(p.y * 18.0);
     float r = hashf(band + uSeed);

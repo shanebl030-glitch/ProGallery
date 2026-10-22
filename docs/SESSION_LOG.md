@@ -276,3 +276,20 @@ unreliable.
       exported 4K video on real hardware (previously only JVM/design-verified — the CI emulator
       was down the whole time).
 - No code change in this entry; recording the on-device verification result.
+
+## 2026-10-23 — Session 13 (v0.4.6, more transitions + duration slider)
+- Shane: continue transition work, explore more, and when adding a transition be able to select
+  how long it goes for.
+- Added 4 new per-clip transitions (same proven engine, CPU reference + GLSL in lockstep):
+  Spin (rotate+zoom, L/R direction), Shake (seed-animated jitter), Pixelate (uv quantise), Ripple
+  (sinusoidal uv warp). New TransitionUniforms fields rotate/pixel/shake/ripple + MAX_* consts.
+  Timeline glyphs added. 15 selectable transitions now.
+- Duration control: the "Length" chips were buried BELOW the whole family grid (easy to miss).
+  Restructured TransitionTools — controls (Length slider + Direction + Strength) now sit right
+  under the preview; Length is a Slider (0.2–3.0 s) with live value, committing once on release
+  (no undo spam). Grid relabelled "Choose a transition".
+- Verified design via the CPU-reference contact sheet (transitions_v2.png) and 83 core tests
+  (new spinPixelateShakeRippleTransform). Fixed ProjectCodecTest's "unknown type" fixture (it
+  used "SPIN", now a real type → changed to NOT_A_REAL_TYPE).
+- Device export test allTransitionsRenderOnExport auto-covers the new ones; runs when the CI
+  emulator returns (still down).

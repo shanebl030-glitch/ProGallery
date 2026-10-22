@@ -2,6 +2,32 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.6] — 2026-10-23 — more transitions + a proper duration control
+
+### Added — 4 new transitions (15 selectable now)
+Built on the same per-clip engine (CPU-reference-verified, same pattern as the colour grade):
+- **Spin** (Movement) — the frame rotates through the cut, with a slight zoom so the corners stay
+  filled; left/right chooses the spin direction; strength sets the angle.
+- **Shake** (Movement) — a camera-shake jitter that peaks at the cut; strength sets how hard.
+- **Pixelate** (Stylised) — the frame dissolves into blocks and back; strength sets the block size.
+- **Ripple** (Stylised) — a wave/liquid distortion across the cut; strength sets the amplitude.
+
+### Changed — duration control
+- When you select a transition, a **Length slider (0.2–3.0 s)** now appears **right under the
+  preview**, with the live value shown (e.g. "1.2 s"). It commits once when you let go (so it
+  doesn't flood undo), and the chosen length drives the real exported transition. The controls
+  (Length / Direction / Strength) moved above the picker grid so they're always visible, and the
+  grid is now clearly labelled "Choose a transition".
+
+### Testing
+- **83 core unit tests** (added `spinPixelateShakeRippleTransform`, which renders each new effect
+  with the CPU reference and checks it transforms the frame and is a no-op at the endpoints).
+- The design of all 15 transitions was verified by rendering real before/during/after frames.
+- `allTransitionsRenderOnExport` iterates every selectable transition, so the new ones are covered
+  by the on-device export test automatically — which **runs when the CI emulator returns** (still
+  down). Build + lint + unit tests pass on CI.
+- 0.4.5's export fix is confirmed working on the physical Galaxy Z Fold5 (Android 16).
+
 ## [0.4.5] — 2026-10-23 — export no longer depends on the foreground service
 
 0.4.4 stopped the *crash* but broke normal exporting on the Galaxy Z Fold5: tapping Export while

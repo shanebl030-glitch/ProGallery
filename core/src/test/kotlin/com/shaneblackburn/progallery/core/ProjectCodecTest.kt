@@ -97,7 +97,7 @@ class ProjectCodecTest {
               {"uri":"","duration":5000},
               {"uri":"content://v/2","duration":0}
             ],
-            "transitions":[{"type":"SPIN","ms":-5}],
+            "transitions":[{"type":"NOT_A_REAL_TYPE","ms":-5}],
             "music":{"uri":"","duration":100}}}"""
         val p = ProjectCodec.decode(json).project
         assertEquals(1, p.clips.size, "clips without a source or duration are dropped")

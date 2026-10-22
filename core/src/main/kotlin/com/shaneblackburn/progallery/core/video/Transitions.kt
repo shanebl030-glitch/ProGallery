@@ -54,10 +54,14 @@ enum class TransitionType(
     CROSS_ZOOM("Cross zoom", TransitionFamily.BLUR, usesIntensity = true),
     WHIP_PAN("Whip pan", TransitionFamily.MOVE, usesDirection = true, usesIntensity = true),
     PUSH("Push / slide", TransitionFamily.MOVE, usesDirection = true),
+    SPIN("Spin", TransitionFamily.MOVE, usesDirection = true, usesIntensity = true),
+    SHAKE("Shake", TransitionFamily.MOVE, usesIntensity = true),
     WIPE("Wipe", TransitionFamily.REVEAL, usesDirection = true),
     IRIS("Iris", TransitionFamily.REVEAL),
     LIGHT_LEAK("Light leak", TransitionFamily.STYLE, usesIntensity = true),
     GLITCH("Glitch", TransitionFamily.STYLE, usesIntensity = true),
+    PIXELATE("Pixelate", TransitionFamily.STYLE, usesIntensity = true),
+    RIPPLE("Ripple", TransitionFamily.STYLE, usesIntensity = true),
 
     /** True cross dissolve — requires the two-clip overlap compositor; not selectable yet. */
     CROSS_DISSOLVE("Cross dissolve", TransitionFamily.DISSOLVE, crossClip = true),
@@ -70,6 +74,7 @@ enum class TransitionType(
     fun directions(): List<TransitionDirection> = when (this) {
         ZOOM -> listOf(TransitionDirection.IN, TransitionDirection.OUT)
         WHIP_PAN, PUSH -> listOf(TransitionDirection.LEFT, TransitionDirection.RIGHT, TransitionDirection.UP, TransitionDirection.DOWN)
+        SPIN -> listOf(TransitionDirection.LEFT, TransitionDirection.RIGHT)
         WIPE -> listOf(TransitionDirection.LEFT, TransitionDirection.RIGHT, TransitionDirection.UP, TransitionDirection.DOWN, TransitionDirection.DIAGONAL)
         else -> emptyList()
     }
@@ -148,6 +153,14 @@ data class TransitionUniforms(
     val leakY: Float = 0.4f,
     /** Glitch strength, 0..1 (block displacement + chromatic split). */
     val glitch: Float = 0f,
+    /** Rotation about the centre, in radians (Spin). */
+    val rotate: Float = 0f,
+    /** Pixelation block size as a fraction of the frame (0 = off). */
+    val pixel: Float = 0f,
+    /** Camera-shake jitter amount as a fraction of the frame (seed-animated). */
+    val shake: Float = 0f,
+    /** Ripple/wave displacement amplitude as a fraction of the frame (seed-animated). */
+    val ripple: Float = 0f,
 ) {
     val isIdentity: Boolean get() = this == IDENTITY
 
@@ -157,6 +170,14 @@ data class TransitionUniforms(
         const val MAX_BLUR_UV = 0.05f
         /** Max zoom punch-in/out factor. */
         const val MAX_ZOOM = 0.8f
+        /** Max spin angle (radians) at the cut. */
+        const val MAX_SPIN = 2.6f
+        /** Max pixelation block size (fraction of the frame). */
+        const val MAX_PIXEL = 0.11f
+        /** Max shake jitter (fraction of the frame). */
+        const val MAX_SHAKE = 0.05f
+        /** Max ripple amplitude (fraction of the frame). */
+        const val MAX_RIPPLE = 0.04f
     }
 }
 
@@ -235,6 +256,20 @@ data class TransitionSample(
                 fade = e * e * 0.22f, fadeR = 1f, fadeG = 0.9f, fadeB = 0.72f,
             )
             TransitionType.GLITCH -> TransitionUniforms(glitch = e * (0.4f + 0.6f * i))
+            TransitionType.SPIN -> {
+                // Both clips spin the same way, so the rotation is continuous across the cut.
+                val sign = if (dir == TransitionDirection.RIGHT) -1f else 1f
+                TransitionUniforms(
+                    rotate = sign * e * (0.5f + 0.5f * i) * TransitionUniforms.MAX_SPIN,
+                    scale = 1f + e * 0.5f, // zoom in a little so the rotated corners don't show black
+                )
+            }
+            TransitionType.SHAKE -> TransitionUniforms(
+                shake = e * (0.4f + 0.6f * i) * TransitionUniforms.MAX_SHAKE,
+                blur = e * i * 0.4f * TransitionUniforms.MAX_BLUR_UV,
+            )
+            TransitionType.PIXELATE -> TransitionUniforms(pixel = e * (0.3f + 0.7f * i) * TransitionUniforms.MAX_PIXEL)
+            TransitionType.RIPPLE -> TransitionUniforms(ripple = e * (0.4f + 0.6f * i) * TransitionUniforms.MAX_RIPPLE)
             else -> TransitionUniforms.IDENTITY
         }
     }
@@ -283,10 +318,35 @@ object TransitionCpu {
         return acc
     }
 
-    /** Renders one pixel at normalised ([x],[y]). [seed] animates the glitch (use 0 for tests). */
+    /** Renders one pixel at normalised ([x],[y]). [seed] animates glitch/shake/ripple (0 for tests). */
     fun render(u: TransitionUniforms, x: Float, y: Float, seed: Float, src: (Float, Float) -> FloatArray): FloatArray {
-        var su = (x - 0.5f) / u.scale + 0.5f - u.offX
-        val sv = (y - 0.5f) / u.scale + 0.5f - u.offY
+        // Rotate about the centre (Spin), then scale + pan.
+        var px = x - 0.5f
+        var py = y - 0.5f
+        if (u.rotate != 0f) {
+            val cs = cos(u.rotate); val sn = sin(u.rotate)
+            val rx = px * cs - py * sn; val ry = px * sn + py * cs
+            px = rx; py = ry
+        }
+        var su = px / u.scale + 0.5f - u.offX
+        var sv = py / u.scale + 0.5f - u.offY
+        // Camera shake (seed-animated jitter).
+        if (u.shake > 0f) {
+            su += (hash(floor(seed) * 3.1f) - 0.5f) * u.shake
+            sv += (hash(floor(seed) * 5.7f + 1.3f) - 0.5f) * u.shake
+        }
+        // Ripple / wave.
+        if (u.ripple > 0f) {
+            val phase = seed * 0.6f
+            val du = sin(sv * 22f + phase) * u.ripple
+            val dv = sin(su * 22f + phase * 1.3f) * u.ripple
+            su += du; sv += dv
+        }
+        // Pixelate (quantise to blocks).
+        if (u.pixel > 0f) {
+            su = (floor(su / u.pixel) + 0.5f) * u.pixel
+            sv = (floor(sv / u.pixel) + 0.5f) * u.pixel
+        }
         if (u.glitch > 0f) {
             val band = floor(y * 18f)
             val r = hash(band + seed)

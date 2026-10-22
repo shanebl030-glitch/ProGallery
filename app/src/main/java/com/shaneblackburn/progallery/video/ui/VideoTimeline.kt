@@ -293,10 +293,14 @@ private fun TransitionButton(type: TransitionType, selected: Boolean, onClick: (
                     TransitionType.CROSS_ZOOM -> "✺"
                     TransitionType.WHIP_PAN -> "»"
                     TransitionType.PUSH -> "⇥"
+                    TransitionType.SPIN -> "↻"
+                    TransitionType.SHAKE -> "≈"
                     TransitionType.WIPE -> "▚"
                     TransitionType.IRIS -> "◉"
                     TransitionType.LIGHT_LEAK -> "✷"
                     TransitionType.GLITCH -> "⚡"
+                    TransitionType.PIXELATE -> "▦"
+                    TransitionType.RIPPLE -> "∿"
                     TransitionType.CROSS_DISSOLVE -> "◎"
                 },
                 fontSize = 11.sp,
