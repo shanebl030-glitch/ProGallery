@@ -7,6 +7,10 @@ All notable changes to ProGallery. Versions follow semantic versioning.
 0.4.4 stopped the *crash* but broke normal exporting on the Galaxy Z Fold5: tapping Export while
 the app was open showed "Export failed — Export needs ProGallery open." This is the real fix.
 
+**Confirmed on device (2026-10-23):** verified on a physical Samsung Galaxy Z Fold5 (Android 16) —
+preview with transitions works, a 4K/high-quality export succeeded, and playback is clean. This
+also confirms the v0.4.0 transition library renders correctly in a real exported video.
+
 ### Root cause (full trace)
 `VideoExportManager.start()` rendered the video with Media3 `Transformer` **in the app process**,
 but it started that render via `startForegroundService()` and the export's fate was tied to the

@@ -266,3 +266,13 @@ unreliable.
   CI emulator is Android 14, can't reproduce the Android-16 refusal). 83 unit tests pass.
 - Lesson: 0.4.4 was a classic "caught the exception, called it fixed" mistake. The right fix was
   architectural — the export never needed the foreground service to run.
+
+## 2026-10-23 — CONFIRMED on device (v0.4.5)
+- Shane confirmed 0.4.5 works on the physical Samsung Galaxy Z Fold5 (Android 16):
+  preview with transitions works; EXPORT at 4K / high quality succeeded; playback is great.
+- This resolves two long-standing "unverified on device" caveats at once:
+  (1) the Fold5/Android-16 export foreground-service crash is fixed and a real user-initiated
+      export now completes and saves; (2) the v0.4.0 transition library renders correctly in an
+      exported 4K video on real hardware (previously only JVM/design-verified — the CI emulator
+      was down the whole time).
+- No code change in this entry; recording the on-device verification result.
