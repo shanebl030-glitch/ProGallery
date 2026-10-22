@@ -133,19 +133,25 @@ vec3 tap(vec2 uv) {
   return texture2D(uTexSampler, uv).rgb;
 }
 
+// 25-tap (5x5) Gaussian blur. Taps spaced at half the radius (step = uBlur/2) so neighbouring
+// samples overlap into a smooth ramp. A sparse kernel lays down ghost copies of sharp edges and
+// RAISES high-frequency detail on real video; this denser kernel genuinely softens. Kept in
+// lockstep with TransitionCpu.sampleBlur (gw = 1-D Gaussian sigma=1).
 vec3 sampleBlur(vec2 uv) {
   if (uBlur <= 0.0) return tap(uv);
-  float s = uBlur;
-  vec3 c = tap(uv) * 0.25;
-  c += tap(uv + vec2( s, 0.0)) * 0.125;
-  c += tap(uv + vec2(-s, 0.0)) * 0.125;
-  c += tap(uv + vec2(0.0,  s)) * 0.125;
-  c += tap(uv + vec2(0.0, -s)) * 0.125;
-  c += tap(uv + vec2( s,  s)) * 0.0625;
-  c += tap(uv + vec2(-s,  s)) * 0.0625;
-  c += tap(uv + vec2( s, -s)) * 0.0625;
-  c += tap(uv + vec2(-s, -s)) * 0.0625;
-  return c;
+  float step = uBlur * 0.5;
+  float gw[5];
+  gw[0] = 0.1353; gw[1] = 0.6065; gw[2] = 1.0; gw[3] = 0.6065; gw[4] = 0.1353;
+  vec3 acc = vec3(0.0);
+  float wsum = 0.0;
+  for (int i = -2; i <= 2; i++) {
+    for (int j = -2; j <= 2; j++) {
+      float w = gw[i + 2] * gw[j + 2];
+      acc += tap(uv + vec2(float(i) * step, float(j) * step)) * w;
+      wsum += w;
+    }
+  }
+  return acc / wsum;
 }
 
 void main() {

@@ -293,3 +293,25 @@ unreliable.
   used "SPIN", now a real type → changed to NOT_A_REAL_TYPE).
 - Device export test allTransitionsRenderOnExport auto-covers the new ones; runs when the CI
   emulator returns (still down).
+
+## 2026-10-23 — Session 14 (v0.4.7, blur quality + first clean on-device transition run)
+- CI emulator returned (healthy rerun 39839341845, commit 91a53b7). FIRST time all 15 transitions
+  were exported on a real device — all 15 exported successfully (SPIN/SHAKE/PIXELATE/RIPPLE all
+  produced good metrics). Two device-test failures surfaced; this session fixes both.
+- BLUR quality (real app bug): the 9-tap blur kernel's taps were a full radius apart, so on real
+  edge-rich video it laid down ghost edges and RAISED high-frequency (on-device BLUR hf=6.37 vs
+  plain 5.35 — wrong direction). Replaced with a 25-tap (5×5) Gaussian, taps at half-radius so they
+  overlap into a smooth ramp. Updated in lockstep: TransitionCpu.sampleBlur (core) + GLSL
+  ClipTransitionEffect.sampleBlur (app). 83 core tests still pass (blurSoftensDetail etc.).
+- Honest note: the ghost-edge failure is content-dependent and only shows on the real GPU-exported
+  frames; it could NOT be reproduced on the pure-CPU JVM harness (tried a synthetic stripe image —
+  both kernels softened it, so it doesn't capture the aliasing). The dense kernel is a principled
+  low-pass fix (25 lightly-weighted taps → any single tap crossing an edge moves adjacent output
+  pixels far less than the old heavy corner taps), but the PROOF is the device re-run, reported
+  with delivery — not claimed up front.
+- Device-test miscategorisation (test bug, not app bug): allTransitionsRenderOnExport put WHIP_PAN
+  (luma 2.5) and PUSH (luma 0.0) in the "must not be black" else-branch, but both slide the clips
+  fully off-screen by design, so the exact-cut frame is legitimately black. Moved them into the
+  "passes through black" group with Fade-black/Wipe/Iris. Updated the in-app guide line to match.
+- Bumped to versionCode 13 / versionName 0.4.7. Next: push, re-run device tests to confirm a clean
+  pass, then sign + deliver only if it passes; report the real result either way.

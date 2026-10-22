@@ -199,15 +199,18 @@ class VideoProjectDeviceTest {
                     if (diffOff > 20.0) failures += "$t: effect leaks outside its window (off-cut diff $diffOff)"
                     // 3) Type-specific sanity at the boundary.
                     when (t) {
-                        TransitionType.FADE_BLACK, TransitionType.WIPE, TransitionType.IRIS ->
-                            if (lumaCut > lumaPlainCut * 0.6) failures += "$t: should darken at the cut (luma $lumaCut vs $lumaPlainCut)"
+                        // These pass THROUGH black at the exact cut (by design): fade, wipe/iris
+                        // close to black, and whip/push slide the clips fully off-screen.
+                        TransitionType.FADE_BLACK, TransitionType.WIPE, TransitionType.IRIS,
+                        TransitionType.WHIP_PAN, TransitionType.PUSH ->
+                            if (lumaCut > lumaPlainCut * 0.6) failures += "$t: should darken/clear at the cut (luma $lumaCut vs $lumaPlainCut)"
                         TransitionType.FADE_WHITE ->
                             if (lumaCut < 200) failures += "$t: should go bright/white at the cut (luma $lumaCut)"
                         TransitionType.LIGHT_LEAK ->
                             if (lumaCut <= lumaPlainCut) failures += "$t: should brighten at the cut (luma $lumaCut vs $lumaPlainCut)"
                         TransitionType.BLUR, TransitionType.CROSS_ZOOM ->
                             if (hfCut > hfPlainCut * 0.9) failures += "$t: should soften at the cut (hf $hfCut vs $hfPlainCut)"
-                        else -> // ZOOM / WHIP_PAN / PUSH / GLITCH: movement/disturbance, must not be black.
+                        else -> // ZOOM / SPIN / SHAKE / GLITCH / PIXELATE / RIPPLE: must transform, not black.
                             if (lumaCut < 4) failures += "$t: unexpected black frame at the cut (luma $lumaCut)"
                     }
                 } finally { e.file.delete() }

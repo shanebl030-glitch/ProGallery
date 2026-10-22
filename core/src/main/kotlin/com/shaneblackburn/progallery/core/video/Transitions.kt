@@ -289,6 +289,9 @@ data class TransitionSample(
  * returns black.
  */
 object TransitionCpu {
+    /** 1-D Gaussian weights (sigma=1), outer-product'd for the 5x5 blur kernel. */
+    private val GAUSS1D = floatArrayOf(0.1353f, 0.6065f, 1f, 0.6065f, 0.1353f)
+
     private fun hash(x: Float): Float {
         val s = sin(x * 12.9898f) * 43758.547f
         return s - floor(s)
@@ -305,16 +308,29 @@ object TransitionCpu {
         val c = src(u, v); out[0] = c[0]; out[1] = c[1]; out[2] = c[2]
     }
 
-    /** 9-tap box/gaussian blur in UV space; [blur] is the radius as a fraction of the frame. */
+    /**
+     * 25-tap (5x5) Gaussian blur in UV space; [blur] is the radius as a fraction of the frame.
+     * Taps are spaced at half the radius (step = blur/2) so neighbouring samples overlap into a
+     * smooth ramp. A sparse kernel with widely-spaced taps lays down ghost copies of sharp edges
+     * instead of softening them, which on real video content *raises* high-frequency detail rather
+     * than reducing it (observed on-device: BLUR hf went up, not down). GAUSS1D is a 1-D Gaussian
+     * (sigma=1); the 2-D weight is its outer product, normalised by the running weight sum.
+     */
     private fun sampleBlur(src: (Float, Float) -> FloatArray, u: Float, v: Float, blur: Float): FloatArray {
         val acc = FloatArray(3)
         val t = FloatArray(3)
         if (blur <= 0f) { tap(src, u, v, acc); return acc }
-        val s = blur
-        fun add(du: Float, dv: Float, w: Float) { tap(src, u + du, v + dv, t); acc[0] += t[0] * w; acc[1] += t[1] * w; acc[2] += t[2] * w }
-        add(0f, 0f, 0.25f)
-        add(s, 0f, 0.125f); add(-s, 0f, 0.125f); add(0f, s, 0.125f); add(0f, -s, 0.125f)
-        add(s, s, 0.0625f); add(-s, s, 0.0625f); add(s, -s, 0.0625f); add(-s, -s, 0.0625f)
+        val step = blur * 0.5f
+        var wsum = 0f
+        for (i in -2..2) {
+            for (j in -2..2) {
+                val w = GAUSS1D[i + 2] * GAUSS1D[j + 2]
+                tap(src, u + i * step, v + j * step, t)
+                acc[0] += t[0] * w; acc[1] += t[1] * w; acc[2] += t[2] * w
+                wsum += w
+            }
+        }
+        acc[0] /= wsum; acc[1] /= wsum; acc[2] /= wsum
         return acc
     }
 

@@ -2,6 +2,37 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.7] — 2026-10-23 — blur quality + first clean on-device transition run
+
+The CI emulator came back, so for the first time every one of the 15 transitions was exported on a
+real device (Android 14 emulator). All 15 exported successfully. Two issues surfaced that this
+release fixes.
+
+### Fixed — Blur transition now genuinely softens
+- The Blur (and the blur inside Cross-zoom / Whip / Shake) used a sparse 9-tap kernel whose taps
+  were spaced a full blur-radius apart. On real video with sharp edges that lays down ghost copies
+  of each edge — it *raised* high-frequency detail on-device instead of reducing it (measured:
+  Blur hf 6.37 vs plain 5.35 at the cut — the wrong direction).
+- Replaced it with a **25-tap (5×5) Gaussian** whose taps are spaced at half the radius so
+  neighbouring samples overlap into a smooth ramp. Updated in lockstep in both the GPU shader
+  (`ClipTransitionEffect`) and the CPU reference (`TransitionCpu`). The CPU reference still passes
+  `blurSoftensDetail` / `crossZoomBlursAndFlashes`.
+- *Honest status:* the ghost-edge failure is content-dependent (it only shows on the real exported
+  GPU frames), so it could not be reproduced on the pure-CPU JVM harness — the proof is the
+  on-device re-run, reported with this release rather than asserted up front.
+
+### Fixed — device-test miscategorised two "through-black" transitions
+- `allTransitionsRenderOnExport` flagged **Whip pan** (luma 2.5) and **Push** (luma 0.0) as
+  "unexpected black frame at the cut." Both *slide the clips fully off-screen by design*, so the
+  single exact-cut frame is legitimately black (the streak reads on the surrounding frames). Moved
+  them into the "passes through black at the cut" group alongside Fade-to-black / Wipe / Iris. This
+  was a test assertion bug, not an app bug — the transitions were rendering correctly.
+
+### Testing
+- **83 core unit tests** pass locally (`tools/core-test.sh`).
+- On-device: all 15 transitions export; the two fixes above target the two remaining device-test
+  failures. Result of the device re-run is reported with the delivery, not assumed.
+
 ## [0.4.6] — 2026-10-23 — more transitions + a proper duration control
 
 ### Added — 4 new transitions (15 selectable now)
