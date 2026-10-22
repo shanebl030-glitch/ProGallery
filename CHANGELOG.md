@@ -2,6 +2,48 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.5] — 2026-10-23 — export no longer depends on the foreground service
+
+0.4.4 stopped the *crash* but broke normal exporting on the Galaxy Z Fold5: tapping Export while
+the app was open showed "Export failed — Export needs ProGallery open." This is the real fix.
+
+### Root cause (full trace)
+`VideoExportManager.start()` rendered the video with Media3 `Transformer` **in the app process**,
+but it started that render via `startForegroundService()` and the export's fate was tied to the
+service. On **Android 16 (Samsung SM-F946B)** the platform **refuses the foreground-service start**
+(`ForegroundServiceStartNotAllowedException` / `mAllowStartForeground false`) even for a visible,
+user-initiated action — Android 15/16 tightened foreground-service *start* rules for the
+`dataSync`/`mediaProcessing` types and Samsung enforces them strictly. 0.4.4 caught that refusal
+and **cancelled the export**, so a perfectly runnable in-process export was aborted. Older Android
+(the other phone) doesn't refuse the start, so it only failed on the Fold5.
+
+### The fix — decouple the export from the foreground service
+- The export now **renders in-process first** and its success/failure comes solely from the
+  `Transformer` listener (`onCompleted` → save to the gallery via MediaStore; `onError` → the real
+  error). It does **not** depend on a foreground service — so tapping Export while the app is open
+  works regardless of the OS's foreground-service decision.
+- The keep-alive service is now **best-effort**: started with `startService()` (not
+  `startForegroundService()`, which forces a mandatory foreground promotion), it promotes itself to
+  a foreground service **only if the OS allows it** (for a progress notification + surviving
+  backgrounding). A refusal is logged and ignored — it **no longer crashes or cancels the export**.
+- Removed the 0.4.4 `failBackgroundRefused()` path (it wrongly cancelled valid exports).
+- A system/background restart of the service with no active export still stops quietly
+  (`ExportServicePolicy.shouldRunForeground`).
+
+### Honest limitation
+Without a foreground service, an export can only be *guaranteed* to finish while ProGallery stays
+open. That's the normal case (you tap Export and watch it). If the app is backgrounded on a device
+that refused the foreground service, the OS may stop the export — but it is never silently claimed
+to have succeeded; the in-app progress and result reflect reality.
+
+### Testing
+- **83 core + app unit tests** pass (incl. `ExportServicePolicyTest`).
+- Added `ExportManagerDeviceTest` (instrumented): drives a real user-initiated export through the
+  manager and asserts the video renders and saves. **Compiles; not run** — the CI emulator is down,
+  and even when up it runs Android 14 (can't reproduce the Android-16 refusal).
+- App compiles + lints; debug + release assembled.
+- **Not verified on a physical Galaxy Z Fold5.**
+
 ## [0.4.4] — 2026-10-22 — Galaxy Z Fold5 crash fixed (foreground service)
 
 **Root cause found** from the crash report emailed via 0.4.3 — and it was **not** GPU, foldable or

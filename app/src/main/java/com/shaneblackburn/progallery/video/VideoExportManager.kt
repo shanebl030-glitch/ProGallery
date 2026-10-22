@@ -9,7 +9,6 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.OptIn
-import androidx.core.content.ContextCompat
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Composition
@@ -99,11 +98,10 @@ class VideoExportManager(private val context: Context) {
                 .build()
             transformer = t
             _state.value = ExportState.Running(0f, baseName)
-            // Keep the process alive + show progress while exporting. If the OS refuses the
-            // foreground service (background-start restrictions on Android 14+/16), the export
-            // still runs in-process and shows progress in the app — so a refusal must not crash.
-            runCatching { ContextCompat.startForegroundService(context, Intent(context, VideoExportService::class.java)) }
-                .onFailure { Log.w(TAG, "couldn't start the export service; exporting in-process", it) }
+            // Render the export IN-PROCESS first. Transformer runs inside the app process and does
+            // not need a foreground service, so this is the reliable path for a user-initiated
+            // export (the app is open while they export). The export's success/failure comes from
+            // the Transformer listener above (onCompleted → save; onError → Failed with the reason).
             try {
                 t.start(composition, out.absolutePath)
                 pollProgress()
@@ -111,7 +109,15 @@ class VideoExportManager(private val context: Context) {
                 transformer = null
                 out.delete()
                 _state.value = ExportState.Failed(e.message ?: "Export couldn't start")
+                return@post
             }
+            // Then, BEST-EFFORT, start a keep-alive service for a progress notification and to help
+            // the export survive if the app is backgrounded. Use startService (not
+            // startForegroundService): the service promotes itself to foreground only if the OS
+            // allows it, and a refusal (Android 15/16 FGS-start restrictions, strict on Samsung)
+            // must neither crash nor cancel the export — the in-process render above continues.
+            runCatching { context.startService(Intent(context, VideoExportService::class.java)) }
+                .onFailure { Log.w(TAG, "keep-alive service not started; export runs in-app", it) }
         }
     }
 
@@ -121,22 +127,6 @@ class VideoExportManager(private val context: Context) {
             transformer = null
             tempFile?.delete()
             if (isRunning) _state.value = ExportState.Cancelled
-        }
-    }
-
-    /**
-     * Called when the OS won't let the export run as a foreground service (typically because the
-     * app is in the background). A background export can't be relied on to finish under Android's
-     * execution rules, so stop it cleanly and tell the user to retry rather than leave a half-done
-     * export running unreliably.
-     */
-    fun failBackgroundRefused() {
-        main.post {
-            runCatching { transformer?.cancel() }
-            transformer = null
-            tempFile?.delete()
-            if (isRunning) _state.value =
-                ExportState.Failed("Export needs ProGallery open. Please reopen the app and export the video again.")
         }
     }
 

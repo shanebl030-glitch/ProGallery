@@ -48,21 +48,17 @@ class VideoExportService : Service() {
         ensureChannel()
         val type = if (Build.VERSION.SDK_INT >= 35) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
         else ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        try {
+        // Promote to a foreground service BEST-EFFORT, for a progress notification and to survive
+        // the app being backgrounded. The export itself renders in the app process (see
+        // VideoExportManager) and completes regardless, so if the OS refuses the foreground start
+        // (Android 15/16 FGS-start restrictions, strict on Samsung) we keep running as a normal
+        // service and keep showing progress — we must NOT crash and must NOT cancel the export.
+        runCatching {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(0f, "Preparing…", ongoing = true), type)
-        } catch (e: Exception) {
-            // The OS refused the foreground start (e.g. the app went to the background, or a
-            // per-type quota on newer Android). Without a foreground service the export can't be
-            // relied on to finish — the process may be killed — so we don't pretend it continues:
-            // stop the export cleanly and ask the user to retry with the app open. Never crash.
-            android.util.Log.w(TAG, "foreground export service refused; stopping export cleanly", e)
-            manager.failBackgroundRefused()
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
+        }.onFailure { android.util.Log.w(TAG, "foreground promotion refused; export continues in-app", it) }
 
         scope.launch {
-            (application as ProGalleryApp).videoExport.state.collect { s ->
+            manager.state.collect { s ->
                 when (s) {
                     is ExportState.Running -> notify(notification(s.progress, s.title, ongoing = true))
                     is ExportState.Done -> finish("Video saved", s.title)

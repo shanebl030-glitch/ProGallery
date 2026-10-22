@@ -242,3 +242,27 @@ unreliable.
   emulator down) — but the fix targets the exact exception + state from the report.
 - Lesson reinforced: insisting on the real crash log (not assuming GPU) was correct — the cause
   was an Android-16 foreground-service policy, nothing to do with the GPU/foldable display.
+
+## 2026-10-23 — Session 12 (v0.4.5, export decoupled from foreground service)
+- 0.4.4 stopped the crash but BROKE normal exporting on the Fold5: tapping Export (app open)
+  showed "Export failed — Export needs ProGallery open." My 0.4.4 fallback cancelled the export
+  on any startForeground() refusal — wrong, because Android 16/Samsung refuses the FGS *start*
+  even for a visible user-initiated export.
+- Root cause (full trace): VideoExportManager.start() renders via Media3 Transformer IN-PROCESS,
+  but started it through startForegroundService() and tied the export's fate to the service.
+  Android 15/16 tightened FGS-start rules for dataSync/mediaProcessing; Samsung enforces strictly;
+  startForeground() → ForegroundServiceStartNotAllowedException (mAllowStartForeground false).
+  0.4.4 caught it and cancelled the export.
+- Fix — decouple:
+  - Export renders in-process first; success/failure from the Transformer listener only
+    (onCompleted → MediaStore save; onError → real error). No dependency on the service.
+  - Keep-alive service is best-effort: startService() (not startForegroundService()), promotes to
+    foreground only if allowed; a refusal is logged, never crashes or cancels the export.
+  - Removed failBackgroundRefused(). Kept the shouldRunForeground guard for system restarts.
+  - Honest limit: without an FGS, an export is only guaranteed while the app stays open (the normal
+    case). Never claims background success falsely.
+- Tests: ExportServicePolicyTest (JVM) + new ExportManagerDeviceTest (instrumented, drives a real
+  export through the manager). The instrumented test COMPILES but did NOT run (emulator down; and
+  CI emulator is Android 14, can't reproduce the Android-16 refusal). 83 unit tests pass.
+- Lesson: 0.4.4 was a classic "caught the exception, called it fixed" mistake. The right fix was
+  architectural — the export never needed the foreground service to run.
