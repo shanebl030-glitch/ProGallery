@@ -2,6 +2,39 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.2] — 2026-10-22 — Android 13+ / Samsung Galaxy compatibility
+
+Broadens robustness across Samsung Galaxy devices (S, Z Fold, Z Flip, A series) on Android 13
+and newer, following the Galaxy Z Fold5 video-editing crash. The **exact Fold5 cause still needs
+a crash report from that device** (see 0.4.1) — this release widens compatibility and adds a
+foldable-specific mitigation, but does not claim the Fold5 crash is fixed.
+
+### Compatibility
+- **Supported range stated and centralised** (`core/video/Compat.kt`): minSdk = Android 10 (API 29),
+  which covers Android 13+ (the required floor) and older; targetSdk = Android 15 (API 35). Kept
+  minSdk at 29 rather than raising to 33 because 29 already satisfies "Android 13 and newer" while
+  also supporting 10–12 — raising it would only drop devices, with no benefit for a personal app.
+- **Foldable display switch handling.** `resizeableActivity="true"` is now explicit, and the editor
+  **rebuilds the preview when the screen configuration changes** (fold↔unfold on a Z Fold/Flip, or
+  rotation). The window resizes without the Activity being recreated, so the player now gets a fresh
+  surface for the new size instead of rendering onto a stale one — a plausible non-GPU cause of a
+  foldable crash. (If the full-effects preview still can't run on a device, Safe preview mode from
+  0.4.1 takes over; effects still apply on export.)
+- **GPU-safe output clamp.** Output dimensions are clamped to even numbers within a conservative
+  maximum (7680) that stays inside the OpenGL texture limit on every supported GPU, protecting the
+  GL pipeline from oversized sources. Normal phone video (up to 8K) is unaffected.
+- Android 13/14/15 media permissions (granular `READ_MEDIA_*`, partial `…_USER_SELECTED`, foreground
+  service types) were already in place and are unchanged. No network permission (no ads/telemetry).
+
+### Testing (JVM only — not run on a physical Samsung device)
+- **82 core unit tests** (added `CompatTest` across simulated Android versions + source sizes, and
+  `fullEditingWorkflowStaysConsistent`, which chains open → split → delete middle → trim → transition
+  with duration → reorder → frame-step → save/load).
+- App compiles + lints on CI.
+- **Not verified on a Galaxy Z Fold5 or any Samsung phone, and not on the CI emulator** (GitHub's
+  hosted emulator is still failing to boot). On-device verification and the exact crash cause depend
+  on the crash report / logcat from the Fold5.
+
 ## [0.4.1] — 2026-10-22 — crash diagnostics + Safe preview mode
 
 Focused on the Samsung Galaxy Fold crash Shane reported (ProGallery force-closes when editing

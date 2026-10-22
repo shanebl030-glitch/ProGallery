@@ -23,6 +23,7 @@ import androidx.media3.transformer.Effects
 import com.google.common.collect.ImmutableList
 import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.ClipEdge
+import com.shaneblackburn.progallery.core.video.Compat
 import com.shaneblackburn.progallery.core.video.VideoGrade
 import com.shaneblackburn.progallery.core.video.VideoProject
 import kotlin.math.roundToInt
@@ -70,7 +71,8 @@ object ProjectComposer {
             val short = minOf(w, h)
             if (target < short) { val s = target.toFloat() / short; w = (w * s).roundToInt(); h = (h * s).roundToInt() }
         }
-        return (w / 2 * 2).coerceAtLeast(2) to (h / 2 * 2).coerceAtLeast(2)
+        // Clamp to even dimensions within a GPU-safe maximum (compatibility across devices).
+        return Compat.clampOutput(w, h)
     }
 
     fun build(project: VideoProject, settings: VideoExportSettings = VideoExportSettings()): Composition {

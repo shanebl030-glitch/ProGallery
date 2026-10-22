@@ -61,6 +61,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
@@ -195,6 +196,14 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     }
     // Toggling Safe preview mode rebuilds the preview with/without the effects pipeline.
     LaunchedEffect(safeMode) {
+        val p = vm.project
+        if (p.clips.isNotEmpty() && p.clips.none { it.uri in vm.missing.value }) preview.show(p, positionMs)
+    }
+    // Foldables (e.g. Galaxy Z Fold5) switch between the cover and main displays, and phones
+    // rotate: the window resizes without the Activity being recreated. Rebuild the preview so the
+    // player gets a fresh surface for the new size instead of rendering onto a stale one.
+    val configuration = LocalConfiguration.current
+    LaunchedEffect(configuration.screenWidthDp, configuration.screenHeightDp) {
         val p = vm.project
         if (p.clips.isNotEmpty() && p.clips.none { it.uri in vm.missing.value }) preview.show(p, positionMs)
     }

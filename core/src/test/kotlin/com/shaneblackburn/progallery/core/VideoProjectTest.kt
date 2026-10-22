@@ -5,8 +5,11 @@ import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.Fade
 import com.shaneblackburn.progallery.core.video.FadeCurve
 import com.shaneblackburn.progallery.core.video.TimedText
+import com.shaneblackburn.progallery.core.video.ProjectCodec
+import com.shaneblackburn.progallery.core.video.ProjectDoc
 import com.shaneblackburn.progallery.core.video.Transition
 import com.shaneblackburn.progallery.core.video.ClipEdge
+import com.shaneblackburn.progallery.core.video.TransitionDirection
 import com.shaneblackburn.progallery.core.video.TransitionType
 import com.shaneblackburn.progallery.core.video.VideoProject
 import kotlin.test.Test
@@ -199,6 +202,31 @@ class VideoProjectTest {
         val cut = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000)))
         assertEquals(0L, cut.clipEdge(0).outMs)
         assertTrue(!cut.clipEdge(0).sampleAt(4_000).isActive)
+    }
+
+    @Test fun fullEditingWorkflowStaysConsistent() {
+        // Open two clips, split the first and delete the middle piece, trim the second, add a
+        // transition with a duration, reorder, frame-step, and round-trip through save/load.
+        var p = VideoProject(listOf(clip(1, 6_000), clip(2, 6_000)))
+        assertEquals(12_000, p.durationMs)
+        p = p.splitAt(2_000)
+        assertEquals(3, p.clips.size)
+        p = p.removeClip(1) // delete the middle piece of clip 1
+        assertEquals(2, p.clips.size)
+        assertEquals(8_000, p.durationMs, "0–2 s of A + all of B")
+        p = p.updateClip(1) { it.withTrim(1_000, 6_000) }
+        assertEquals(7_000, p.durationMs)
+        p = p.setTransition(0, Transition(TransitionType.WIPE, 800, TransitionDirection.LEFT, 0.7f))
+        assertTrue(p.hasAnyTransition())
+        assertEquals(400L, p.clipEdge(0).outMs, "transition duration drives the export window")
+        // Reorder (doesn't mutate p here, just checks the op).
+        assertEquals(listOf(2L, 1L), p.moveClip(0, 1).clips.map { it.id })
+        // Frame-step stays inside the project.
+        assertTrue(p.stepFrames(1_000, 1) in 1_001..1_100)
+        assertTrue(p.stepFrames(0, -3) == 0L)
+        // The whole edit survives save/load byte-for-byte.
+        val back = ProjectCodec.decode(ProjectCodec.encode(ProjectDoc("w", "n", 0, 0, p))).project
+        assertEquals(p, back)
     }
 
     @Test fun moveClip() {

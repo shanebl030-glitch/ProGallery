@@ -33,6 +33,7 @@
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
         android:largeHeap="true"
+        android:resizeableActivity="true"
         android:theme="@style/Theme.ProGallery"
         tools:targetApi="35">
 

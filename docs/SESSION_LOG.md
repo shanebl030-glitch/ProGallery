@@ -177,3 +177,27 @@ unreliable.
   model + Android version, to identify the exact cause. Until then, Safe preview mode keeps the
   editor usable on that device.
 - Still blocked: CI emulator outage continues, so no on-device export verification of transitions.
+
+## 2026-10-22 — Session 9 (v0.4.2, Android 13+/Samsung compatibility)
+- Shane clarified the device is a Samsung Galaxy Z Fold5 (his friend's), and set ongoing
+  requirements: support Android 13 and all newer; design for Galaxy S/Z Fold/Z Flip/A series
+  (different SoCs, GPUs, decoders, memory, screens, foldables); find the ACTUAL Fold5 cause from
+  crash logs rather than assuming GPU; keep all editing features working; graceful fallbacks not
+  crashes; automated + clearly-labelled device tests; preserve data/settings/icon/credit; same
+  signing key; no Play/ads/IAP. Fix Fold5 first, then broaden.
+- Note: Z Fold5 = Snapdragon 8 Gen 2 / Adreno 740 (a flagship GPU), so a raw "GPU can't compile
+  shaders" theory is unlikely. More plausible non-GPU causes: the experimental Media3
+  CompositionPlayer, or the cover↔main display switch resizing the preview surface.
+- STILL need the crash report/logcat from the Fold5 to pin the exact cause — not received yet.
+- Shipped compatibility hardening (not a claimed Fold5 fix):
+  - core/video/Compat.kt: pure, unit-tested version/size decisions (supported range, HDR tone-map
+    availability, GPU-safe even-dimension output clamp). minSdk kept at 29 (covers 13+ and older);
+    targetSdk 35.
+  - resizeableActivity=true; editor rebuilds the preview on configuration change (fold/unfold/
+    rotate) so a stale surface can't crash — a concrete foldable mitigation.
+  - Output size clamped via Compat.clampOutput.
+- Tests: 82 core (added CompatTest across simulated SDKs/sizes + fullEditingWorkflowStaysConsistent).
+  All JVM-level; NOT run on a Samsung device or the CI emulator (emulator outage continues).
+- Reminder to self: the CI build job's unit-test/assemble steps use continue-on-error; the REAL
+  pass/fail is in ci-results SUMMARY.txt (core_tests/app_tests/assemble/lint outcomes), not the
+  masked step conclusions. (A missing import in 0.4.1 was caught this way.)
