@@ -144,8 +144,12 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     var confirmDiscard by remember { mutableStateOf(false) }
     var textEdit by remember { mutableStateOf<TimedText?>(null) }
     var settings by remember { mutableStateOf(VideoExportSettings()) }
+    // Safe preview mode skips the GPU effects pipeline in the preview (effects still export).
+    // Persisted; auto-enabled after a video-editor crash so the device isn't stuck crash-looping.
+    var safeMode by remember { mutableStateOf(com.shaneblackburn.progallery.CrashReporter.isSafePreview()) }
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { com.shaneblackburn.progallery.CrashReporter.setPhase("video:editor") }
 
     // A brand-new project has been written to storage: let the caller switch to its saved route.
     LaunchedEffect(persisted, doc?.id, loading) {
@@ -169,6 +173,7 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             onError = { previewError = it },
             onMode = { simplifiedPreview = it == com.shaneblackburn.progallery.video.PreviewMode.SIMPLIFIED },
             onFallbackReason = { fallbackReason = it },
+            safeMode = { safeMode },
         )
     }
     DisposableEffect(Unit) { onDispose { preview.release() } }
@@ -187,6 +192,11 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                 // A missing source would make the whole preview fail; wait until it's resolved.
                 if (p.clips.isNotEmpty() && p.clips.none { it.uri in vm.missing.value }) preview.show(p, positionMs)
             }
+    }
+    // Toggling Safe preview mode rebuilds the preview with/without the effects pipeline.
+    LaunchedEffect(safeMode) {
+        val p = vm.project
+        if (p.clips.isNotEmpty() && p.clips.none { it.uri in vm.missing.value }) preview.show(p, positionMs)
     }
     // Keep the timeline under the playhead while playing.
     LaunchedEffect(playing) {
@@ -404,6 +414,8 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                     },
                     onMusic = { pickMusic.launch(arrayOf("audio/*")) },
                     onCommit = vm::commit,
+                    safePreview = safeMode,
+                    onSafePreview = { on -> safeMode = on; com.shaneblackburn.progallery.CrashReporter.setSafePreview(on) },
                 )
             }
         }

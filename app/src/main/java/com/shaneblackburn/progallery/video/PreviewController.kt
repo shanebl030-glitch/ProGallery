@@ -11,6 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.transformer.CompositionPlayer
 import androidx.media3.ui.PlayerView
+import com.shaneblackburn.progallery.CrashReporter
 import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.VideoProject
 
@@ -42,6 +43,8 @@ class PreviewController(
     private val onMode: (PreviewMode) -> Unit = {},
     /** Full technical reason the full-effects preview fell back (for diagnostics), or null. */
     private val onFallbackReason: (String?) -> Unit = {},
+    /** When true, skip the GPU effects pipeline entirely and use the simple player (Safe mode). */
+    private val safeMode: () -> Boolean = { false },
 ) {
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var player: Player? = null
@@ -67,8 +70,15 @@ class PreviewController(
         current = project
         if (project.clips.isEmpty()) return false
         val target = positionMs.coerceIn(0, maxOf(0, project.durationMs - 1))
+        // Safe mode: deliberately skip the CompositionPlayer GPU pipeline (the most likely cause
+        // of a device-specific native crash) and preview with the plain player instead.
+        if (safeMode()) {
+            CrashReporter.setPhase("video:preview-safe")
+            return startSimplePlayer(project, target, wasPlaying, cause = null)
+        }
         mode = PreviewMode.FULL
         onMode(PreviewMode.FULL)
+        CrashReporter.setPhase("video:preview-full")
         return try {
             val p = CompositionPlayer.Builder(context).build()
             var pendingFrameSeek = !wasPlaying
@@ -103,19 +113,29 @@ class PreviewController(
         }
     }
 
+    /** Backwards-compatible name for an error-driven fallback. */
+    @MainThread
+    private fun fallbackToSimplePlayer(project: VideoProject, target: Long, wasPlaying: Boolean, cause: Throwable): Boolean =
+        startSimplePlayer(project, target, wasPlaying, cause)
+
     /**
-     * Raw ExoPlayer playback of the clips (no effects), for when the composition pipeline
-     * can't decode the media. Returns true if it started.
+     * Raw ExoPlayer playback of the clips (no effects). Used either because the composition
+     * pipeline couldn't decode the media ([cause] non-null) or because Safe preview mode is on
+     * ([cause] null, a deliberate choice). Returns true if it started.
      */
     @MainThread
-    private fun fallbackToSimplePlayer(project: VideoProject, target: Long, wasPlaying: Boolean, cause: Throwable): Boolean {
+    private fun startSimplePlayer(project: VideoProject, target: Long, wasPlaying: Boolean, cause: Throwable?): Boolean {
         releasePlayer()
-        // Record exactly why the effects pipeline failed, so a device-specific issue can be
-        // diagnosed from the app (and logcat) without needing the source video.
-        val reason = buildReason(project, cause)
-        android.util.Log.e("PreviewController", "effects preview failed; using simplified playback. $reason", cause)
-        onFallbackReason(reason)
-        if (project.clips.isEmpty()) { onError(diagnose(project, cause)); return false }
+        if (cause != null) {
+            // Record exactly why the effects pipeline failed, so a device-specific issue can be
+            // diagnosed from the app (and logcat) without needing the source video.
+            val reason = buildReason(project, cause)
+            android.util.Log.e("PreviewController", "effects preview failed; using simplified playback. $reason", cause)
+            onFallbackReason(reason)
+        } else {
+            onFallbackReason(null)
+        }
+        if (project.clips.isEmpty()) { onError(cause?.let { diagnose(project, it) }); return false }
         return try {
             val exo = ExoPlayer.Builder(context).build()
             exo.addListener(object : Player.Listener {
@@ -170,7 +190,8 @@ class PreviewController(
         return 0 to 0L
     }
 
-    private fun simplifiedNotice(project: VideoProject, cause: Throwable): String {
+    private fun simplifiedNotice(project: VideoProject, cause: Throwable?): String {
+        if (cause == null) return "Safe preview mode — colour, speed and effects still apply on export."
         val info = firstVideoInfo(project)
         val fmt = info?.summary()?.let { " ($it)" } ?: ""
         return "Simplified preview$fmt — colour, speed and effects apply on export."

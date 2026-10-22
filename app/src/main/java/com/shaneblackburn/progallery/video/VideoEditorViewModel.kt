@@ -220,6 +220,7 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
     fun clearError() { _error.value = null }
 
     fun startExport(settings: VideoExportSettings) {
+        com.shaneblackburn.progallery.CrashReporter.setPhase("video:export")
         export.start(project, settings, sourceName, sourceFolder)
     }
 

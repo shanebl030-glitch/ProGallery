@@ -10,6 +10,7 @@ import com.shaneblackburn.progallery.core.video.ProjectDoc
 import com.shaneblackburn.progallery.core.video.TextAnimation
 import com.shaneblackburn.progallery.core.video.TimedText
 import com.shaneblackburn.progallery.core.video.Transition
+import com.shaneblackburn.progallery.core.video.TransitionDirection
 import com.shaneblackburn.progallery.core.video.TransitionType
 import com.shaneblackburn.progallery.core.video.VideoColor
 import com.shaneblackburn.progallery.core.video.VideoFilter
@@ -60,7 +61,7 @@ class ProjectCodecTest {
             hasAudio = false, isImage = true, mimeType = "image/jpeg").withImageDuration(4_500)
         return VideoProject(
             clips = listOf(video, photo),
-            transitions = listOf(Transition(TransitionType.BLUR, 800)),
+            transitions = listOf(Transition(TransitionType.WIPE, 800, TransitionDirection.UP, 0.9f)),
             texts = listOf(TimedText(5, "Day \"one\"\nat the beach", 200, 3_000, x = 0.3f, y = 0.2f, size = 0.08f,
                 color = 0xFFFF8800.toInt(), background = false, animation = TextAnimation.POP)),
             music = MusicTrack("content://audio/1", "song.mp3", 180_000, startOffsetMs = 15_000, volume = 0.5f,

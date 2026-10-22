@@ -131,6 +131,9 @@ fun ProGalleryRoot(vm: GalleryViewModel) {
         else vm.onPermissionState(true)
     }
 
+    // One-shot report if the app was closed by an uncaught exception last time.
+    CrashReportDialog()
+
     // System consent dialog for trash/delete/rename/move.
     var pendingConsent by remember { mutableStateOf<UiEvent.Consent?>(null) }
     val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->

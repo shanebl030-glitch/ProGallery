@@ -20,6 +20,12 @@ import com.shaneblackburn.progallery.ui.components.MediaThumbKeyer
  */
 class ProGalleryApp : Application(), ImageLoaderFactory {
 
+    override fun onCreate() {
+        super.onCreate()
+        // Capture uncaught exceptions to a shareable report before the process dies.
+        CrashReporter.install(this)
+    }
+
     val settings by lazy { SettingsRepository(this) }
     val media by lazy { MediaRepository(this) }
     val actions by lazy { MediaActions(this) }

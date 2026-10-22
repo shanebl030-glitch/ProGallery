@@ -2,6 +2,48 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.1] — 2026-10-22 — crash diagnostics + Safe preview mode
+
+Focused on the Samsung Galaxy Fold crash Shane reported (ProGallery force-closes when editing
+video on the Fold, but works on his other phone). The exact cause can't be identified without a
+crash log from that device, so this release is built to **capture it** and to **keep the app
+usable** in the meantime — it does not claim the Fold crash is fixed.
+
+### Added
+- **Crash reporter.** Any uncaught exception is now written to a shareable report (app version,
+  device model + SoC, Android version, what the app was doing, and the full stack trace) instead
+  of vanishing into Android's "keeps stopping" dialog. On the next launch the app offers to
+  **share or copy** that report. Also available any time in **Settings › Diagnostics**.
+- **Safe preview mode** (Settings/editor toggle). Previews the video **without** the GPU effects
+  pipeline (CompositionPlayer) — the most likely source of a device-specific native GL/codec
+  crash — so the editor stays usable. Effects still apply to the **exported** video. It is turned
+  **on automatically** after a video-editor crash so the device isn't stuck in a crash loop, and
+  can be turned off again in the editor.
+- **Phase tags** in crash reports (e.g. `video:preview-full`, `video:preview-safe`,
+  `video:export`) so a report shows *where* the crash happened.
+
+### Notes on the Fold crash
+The preview already falls back to a plain player on any Media3 decode error, releases are guarded,
+and thumbnails are size-capped independent of screen size — so a remaining crash is most likely a
+**native** GPU/codec crash (which Java cannot catch) or a background-thread exception. Safe preview
+mode avoids the GPU pipeline entirely; if the crash is during **export**, the report will say so and
+a different fix will follow. I need the crash report (or an `adb logcat`) from the Fold to confirm.
+
+### Transitions (unchanged from 0.4.0, re-verified in code/tests)
+All 11 transitions and their **duration/direction/strength** controls are unchanged. Added a unit
+test (`transitionDurationSetsExportWindow`) proving the chosen duration drives the actual export
+window (half on each side of the cut), that Standard cut carries no duration, and that duration +
+direction + strength **persist** across save/load (`projectRoundTripsExactly`). On-device export
+verification of each transition is still pending the CI emulator (see below).
+
+### Testing
+- **78 core unit tests** pass (added the duration-window test).
+- App compiles + lints on CI.
+- **Not verified on a Galaxy Fold:** the crash fix/mitigation and transition export rendering have
+  not been run on that device (I don't have one) or on the CI emulator (GitHub's hosted emulator
+  has been failing to boot for ~19h). Safe preview mode and the crash reporter are the tools to
+  diagnose and work around it on Shane's actual device.
+
 ## [0.4.0] — 2026-10-22 — transition library
 
 Milestone 4 (first part): a full, adjustable transition library with a visual picker.

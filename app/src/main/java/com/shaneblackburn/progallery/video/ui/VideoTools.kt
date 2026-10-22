@@ -448,6 +448,8 @@ fun ProjectTools(
     onAddText: () -> Unit,
     onMusic: () -> Unit,
     onCommit: ((VideoProject) -> VideoProject) -> Unit,
+    safePreview: Boolean = false,
+    onSafePreview: (Boolean) -> Unit = {},
 ) {
     Column {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
@@ -473,6 +475,17 @@ fun ProjectTools(
         Text("Tap a clip to edit it · long-press and drag a clip to reorder · tap the dot between clips for a transition · scroll the timeline to move the playhead",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        Row(
+            Modifier.fillMaxWidth().clickable { onSafePreview(!safePreview) }.padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Safe preview mode", style = MaterialTheme.typography.bodyMedium)
+                Text("Preview without live effects. Turn on if the editor crashes or stutters on this phone — your effects still apply to the exported video.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            androidx.compose.material3.Switch(checked = safePreview, onCheckedChange = onSafePreview)
+        }
     }
 }
 

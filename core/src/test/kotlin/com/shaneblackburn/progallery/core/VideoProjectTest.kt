@@ -178,6 +178,29 @@ class VideoProjectTest {
         assertTrue(!VideoProject(listOf(clip(1, 4_000))).hasAnyTransition())
     }
 
+    @Test fun transitionDurationSetsExportWindow() {
+        // The duration a user picks is split evenly across the cut and drives the effect window
+        // in the export (ProjectComposer reads the same clipEdge the preview does).
+        fun proj(ms: Long) = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000)))
+            .setTransition(0, Transition(TransitionType.BLUR, ms, intensity = 0.8f))
+
+        val short = proj(600).clipEdge(0)
+        assertEquals(300L, short.outMs, "half the duration lands on clip A's tail")
+        assertTrue(!short.sampleAt(3_699).isActive, "nothing before the window (4000-300=3700)")
+        assertTrue(short.sampleAt(3_800).isActive, "effect active inside the window")
+        assertEquals(1f, short.sampleAt(4_000).edge, 1e-3f, "peaks at the cut")
+
+        // A longer duration widens the window; intensity flows through to the render uniforms.
+        val long = proj(2_000).clipEdge(0)
+        assertEquals(1_000L, long.outMs)
+        assertTrue(long.sampleAt(3_100).isActive, "wider window starts earlier (4000-1000=3000)")
+        assertEquals(0.8f, long.sampleAt(4_000).intensity, 1e-3f)
+        // Standard cut carries no duration and no window.
+        val cut = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000)))
+        assertEquals(0L, cut.clipEdge(0).outMs)
+        assertTrue(!cut.clipEdge(0).sampleAt(4_000).isActive)
+    }
+
     @Test fun moveClip() {
         val p = VideoProject(listOf(clip(1, 1000), clip(2, 1000), clip(3, 1000)))
         assertEquals(listOf(2L, 3L, 1L), p.moveClip(0, 2).clips.map { it.id })
