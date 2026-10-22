@@ -149,3 +149,31 @@ unreliable.
 
 - BLOCKER (still): GitHub hosted Android emulator outage — device verification of the whole
   milestone is queued, not done. Delivered with that split stated clearly.
+
+## 2026-10-22 — Session 8 (v0.4.1, Galaxy Fold crash diagnosis)
+- Shane installed 0.4.0 on two phones: works on the first, but on his Samsung Galaxy Fold
+  ProGallery "keeps stopping" when editing video. Asked to find the EXACT cause (not guess),
+  harden error handling so the whole app doesn't close, keep the duration controls, and
+  re-verify transition rendering — and, if I can't reproduce it, tell him exactly how to
+  collect the crash log.
+- Can't reproduce: no Galaxy Fold here, and the CI emulator is still down. Inspected the code:
+  MainActivity already handles configChanges (so fold/unfold does NOT recreate the Activity —
+  rules out the classic foldable crash); the preview already falls back to a plain player on
+  Media3 errors, releases are guarded, thumbnails are capped 160x160 regardless of screen size.
+  So a remaining crash is most likely a NATIVE GPU/codec crash in the CompositionPlayer GL
+  pipeline (uncatchable in Java) or a background-thread exception — and there was NO global
+  uncaught-exception handler, which is why any throw became "keeps stopping".
+- Shipped diagnosis + mitigation (not a claimed fix):
+  - CrashReporter: global handler → shareable report (device + SoC + Android + phase + stack
+    trace); next-launch dialog + Settings > Diagnostics. Synchronous SharedPreferences (safe in
+    a crash handler); chains to the platform handler.
+  - Safe preview mode: skips the GPU effects pipeline in preview (effects still export); editor
+    toggle; auto-enabled after a video crash so the Fold isn't stuck crash-looping.
+  - Phase tags to show where it crashed (preview-full / preview-safe / export).
+- Duration controls verified in code + tests: transitionDurationSetsExportWindow (duration →
+  export window, Standard cut has none) and projectRoundTripsExactly now covers transition
+  direction + intensity persistence. 78 core tests pass.
+- NEED FROM SHANE: the crash report (in-app Share, or adb logcat) from the Fold, plus its exact
+  model + Android version, to identify the exact cause. Until then, Safe preview mode keeps the
+  editor usable on that device.
+- Still blocked: CI emulator outage continues, so no on-device export verification of transitions.
