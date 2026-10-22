@@ -221,3 +221,24 @@ unreliable.
 - Tests: CrashReportTextTest (4 JVM, pass locally via kotlinc); DiagnosticsDeviceTest (instrumented:
   FileProvider attachment + email intent extras) — compiles, NOT run (no device / emulator down).
 - Still no Fold5 crash report received; this feature is the mechanism to get it.
+
+## 2026-10-22 — Session 11 (v0.4.4, Galaxy Z Fold5 crash FIXED)
+- Shane emailed the crash report (via the 0.4.3 feature). ROOT CAUSE, and it was NOT GPU/
+  foldable/preview (as I'd flagged — good that I never claimed otherwise):
+    device : samsung SM-F946B (Z Fold5); android 16 (API 36); doing: startup
+    Caused by: ForegroundServiceStartNotAllowedException: Service.startForeground() not allowed
+    due to mAllowStartForeground false, at VideoExportService.onStartCommand
+- The export foreground service was being (re)started on a cold process in the BACKGROUND
+  (phase "startup" = manager state Idle on a fresh process). Android 14+ (strict on 15/16)
+  forbids starting an FGS from the background → startForeground() threw → uncaught → app crash.
+  The other phone is on older Android where this isn't enforced, hence Fold5-only.
+- Fix:
+  - ExportServicePolicy.shouldRunForeground(state) = state is Running; service stopSelf()s
+    instead of calling startForeground() when no export is running (kills the cold-restart crash).
+  - startForeground() wrapped in try/catch → on refusal, log + stopSelf, export continues
+    in-process with in-app progress (no crash, graceful degradation).
+  - VideoExportManager wraps startForegroundService() in runCatching too.
+- Tests: ExportServicePolicyTest (JVM). 83 total. NOT yet confirmed on the Fold5 (no device /
+  emulator down) — but the fix targets the exact exception + state from the report.
+- Lesson reinforced: insisting on the real crash log (not assuming GPU) was correct — the cause
+  was an Android-16 foreground-service policy, nothing to do with the GPU/foldable display.

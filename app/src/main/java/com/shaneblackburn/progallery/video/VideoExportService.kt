@@ -35,10 +35,29 @@ class VideoExportService : Service() {
             (application as ProGalleryApp).videoExport.cancel()
             return START_NOT_STICKY
         }
+        val manager = (application as ProGalleryApp).videoExport
+        // Only go foreground while an export is actually running. A background/system restart of
+        // this service (e.g. after the process was killed) must NOT call startForeground(): on
+        // Android 14+ (and strictly on 15/16) starting a foreground service from the background is
+        // refused with ForegroundServiceStartNotAllowedException, which would crash the app. This
+        // is the cause of the Galaxy Z Fold5 (Android 16) crash report.
+        if (!ExportServicePolicy.shouldRunForeground(manager.state.value)) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         ensureChannel()
         val type = if (Build.VERSION.SDK_INT >= 35) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
         else ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(0f, "Preparing…", ongoing = true), type)
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(0f, "Preparing…", ongoing = true), type)
+        } catch (e: Exception) {
+            // The OS can still refuse the foreground start (e.g. per-type quotas/state on newer
+            // Android). Never crash: the export itself runs in-process and its progress still shows
+            // inside the app, so we just drop the background notification.
+            android.util.Log.w(TAG, "foreground export service refused; export continues in-app", e)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
 
         scope.launch {
             (application as ProGalleryApp).videoExport.state.collect { s ->
@@ -109,6 +128,7 @@ class VideoExportService : Service() {
     }
 
     companion object {
+        private const val TAG = "VideoExportService"
         private const val CHANNEL = "video_export"
         private const val NOTIFICATION_ID = 41
         private const val DONE_ID = 42

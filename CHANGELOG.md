@@ -2,6 +2,47 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.4] — 2026-10-22 — Galaxy Z Fold5 crash fixed (foreground service)
+
+**Root cause found** from the crash report emailed via 0.4.3 — and it was **not** GPU, foldable or
+preview-related. On a Galaxy Z Fold5 running **Android 16 (API 36)**, the video-export foreground
+service crashed with:
+
+```
+android.app.ForegroundServiceStartNotAllowedException:
+  Service.startForeground() not allowed due to mAllowStartForeground false
+  at VideoExportService.onStartCommand
+```
+
+The report's `doing: startup` showed the export service was being **(re)started on a cold process
+in the background**. Android 14+ — enforced strictly on 15/16 — forbids starting a foreground
+service from the background, so `startForeground()` threw and, being uncaught, took the whole app
+down. Older Android versions (likely on the other phone) don't enforce this, which is why it only
+crashed on the Fold5.
+
+### Fixed
+- The export service now **only goes foreground while an export is actually running**
+  (`ExportServicePolicy.shouldRunForeground`). A background/system restart of the service now stops
+  quietly instead of calling `startForeground()` from the background.
+- `startForeground()` is wrapped so an OS refusal can **never crash the app** — the export runs
+  in-process and its progress still shows inside the app, so at worst the background notification is
+  dropped, not the export.
+- Starting the service from `VideoExportManager` is likewise guarded, so a refused start can't crash
+  the export either.
+
+### Testing
+- **83 core + app unit tests** (added `ExportServicePolicyTest`, which locks in "foreground only
+  while running").
+- App compiles + lints on CI.
+- **Not yet confirmed on the Galaxy Z Fold5.** I don't have the device and the CI emulator is still
+  down. The fix directly addresses the exact exception and state in the crash report; please
+  reproduce the same steps on 0.4.4 — exporting should now work (or, worst case, degrade without a
+  notification) instead of force-closing. If anything still crashes, 0.4.3's crash reporter will
+  capture it.
+
+Everything else (editing, transitions, Safe preview mode, Diagnostics/email crash reports,
+compatibility work, projects, settings, app icon, signing key, author credit) is unchanged.
+
 ## [0.4.3] — 2026-10-22 — email crash reports
 
 Adds a way to email crash reports (so the Galaxy Z Fold5 crash can be diagnosed from the exact

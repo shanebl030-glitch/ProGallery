@@ -99,7 +99,11 @@ class VideoExportManager(private val context: Context) {
                 .build()
             transformer = t
             _state.value = ExportState.Running(0f, baseName)
-            ContextCompat.startForegroundService(context, Intent(context, VideoExportService::class.java))
+            // Keep the process alive + show progress while exporting. If the OS refuses the
+            // foreground service (background-start restrictions on Android 14+/16), the export
+            // still runs in-process and shows progress in the app — so a refusal must not crash.
+            runCatching { ContextCompat.startForegroundService(context, Intent(context, VideoExportService::class.java)) }
+                .onFailure { Log.w(TAG, "couldn't start the export service; exporting in-process", it) }
             try {
                 t.start(composition, out.absolutePath)
                 pollProgress()
