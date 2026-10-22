@@ -67,6 +67,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     var themeDialog by remember { mutableStateOf(false) }
     var slideshowDialog by remember { mutableStateOf(false) }
+    var showDiagnostics by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -154,33 +155,17 @@ fun SettingsScreen(
                 )
             }
             item {
-                val diagCtx = androidx.compose.ui.platform.LocalContext.current
                 ListItem(
                     headlineContent = { Text("Diagnostics") },
                     supportingContent = {
                         Text(
                             if (com.shaneblackburn.progallery.CrashReporter.latestReport() != null)
-                                "Share the last crash report (device info + details)"
-                            else "Share device info (no crash recorded)",
+                                "View, email or share the last crash report"
+                            else "View or send device info (no crash recorded)",
                         )
                     },
                     leadingContent = { Icon(Icons.Outlined.Info, null) },
-                    modifier = Modifier.clickable {
-                        val text = com.shaneblackburn.progallery.CrashReporter.latestReport()
-                            ?: ("ProGallery ${BuildConfig.VERSION_NAME}\n" + com.shaneblackburn.progallery.CrashReporter.deviceInfo())
-                        runCatching {
-                            diagCtx.startActivity(
-                                android.content.Intent.createChooser(
-                                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "ProGallery diagnostics")
-                                        putExtra(android.content.Intent.EXTRA_TEXT, text)
-                                    },
-                                    "Share diagnostics",
-                                ),
-                            )
-                        }
-                    },
+                    modifier = Modifier.clickable { showDiagnostics = true },
                 )
             }
             item {
@@ -203,6 +188,9 @@ fun SettingsScreen(
         }
     }
 
+    if (showDiagnostics) {
+        com.shaneblackburn.progallery.ui.DiagnosticsDialog { showDiagnostics = false }
+    }
     if (themeDialog) {
         ChoiceDialog(
             "Theme",

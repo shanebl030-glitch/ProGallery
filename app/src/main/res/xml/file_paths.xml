@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Crash reports written by CrashReporter to filesDir/crashes/, shared as read-only
+         attachments via FileProvider when the user chooses to email/share one. -->
+    <files-path
+        name="crash-reports"
+        path="crashes/" />
+</paths>

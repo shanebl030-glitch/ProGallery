@@ -1,10 +1,5 @@
 package com.shaneblackburn.progallery.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
@@ -27,16 +22,15 @@ import androidx.compose.ui.unit.dp
 import com.shaneblackburn.progallery.CrashReporter
 
 /**
- * Shown once after the app was closed by an uncaught exception. Lets the user read, copy or
- * share the exact crash report (device + stack trace) so a device-specific crash can be
- * diagnosed without adb. After a video-editor crash, Safe preview mode is turned on so the
- * device isn't stuck in a crash loop.
+ * Shown once after the app was closed by an uncaught exception. Lets the user email the exact
+ * report to Shane, review it first, or dismiss (keeping the report for later in Diagnostics).
+ * Nothing is ever sent automatically — the user picks the app that sends it. After a video-editor
+ * crash, Safe preview mode is turned on so the device isn't stuck in a crash loop.
  */
 @Composable
 fun CrashReportDialog() {
     val context = LocalContext.current
     var pending by remember { mutableStateOf(CrashReporter.hasPendingCrash()) }
-    // If the crash happened while editing video, switch on Safe preview mode automatically.
     val autoSafe = remember { pending && CrashReporter.crashedInVideo() }
     remember { if (autoSafe) CrashReporter.setSafePreview(true); 0 }
     var showFull by remember { mutableStateOf(false) }
@@ -49,50 +43,36 @@ fun CrashReportDialog() {
         onDismissRequest = { CrashReporter.clearPending(); pending = false },
         title = { Text("ProGallery closed unexpectedly") },
         text = {
-            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
                 Text(
-                    if (autoSafe) "Safe preview mode has been turned on so you can keep editing (effects still apply to exported videos). Please send this report so the crash can be fixed:"
-                    else "Please send this report so the crash can be fixed:",
+                    buildString {
+                        if (autoSafe) append("Safe preview mode has been turned on so you can keep editing (effects still apply to exported videos).\n\n")
+                        append("You can email the report to Shane so the crash can be fixed. ")
+                        append(CrashReporter.whatsIncluded())
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                SelectionContainer {
-                    Text(
-                        if (showFull) full else summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
+                if (showFull) {
+                    SelectionContainer {
+                        Text(full, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    }
+                } else {
+                    Text(summary, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                 }
-                if (!showFull) TextButton(onClick = { showFull = true }) { Text("Show full report") }
             }
         },
         confirmButton = {
-            TextButton(onClick = { shareText(context, full) }) { Text("Share report") }
+            TextButton(onClick = { emailCrashReport(context); CrashReporter.clearPending(); pending = false }) {
+                Text("Send Crash Report")
+            }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = { copyText(context, full) }) { Text("Copy") }
-                TextButton(onClick = { CrashReporter.clearPending(); pending = false }) { Text("Dismiss") }
+                TextButton(onClick = { showFull = true }) { Text("View Report") }
+                TextButton(onClick = { CrashReporter.clearPending(); pending = false }) { Text("Not Now") }
             }
         },
     )
-}
-
-private fun shareText(context: Context, text: String) {
-    runCatching {
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "ProGallery crash report")
-            putExtra(Intent.EXTRA_TEXT, text)
-        }
-        context.startActivity(Intent.createChooser(send, "Share crash report"))
-    }.onFailure { Toast.makeText(context, "Couldn't open share sheet", Toast.LENGTH_SHORT).show() }
-}
-
-private fun copyText(context: Context, text: String) {
-    runCatching {
-        val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cb.setPrimaryClip(ClipData.newPlainText("ProGallery crash report", text))
-        Toast.makeText(context, "Crash report copied", Toast.LENGTH_SHORT).show()
-    }
 }

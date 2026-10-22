@@ -59,17 +59,16 @@ object CrashReporter {
         val ctx = appCtx ?: return
         val now = Date()
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(now)
-        val report = buildString {
-            appendLine("ProGallery crash report")
-            appendLine("time    : ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(now)}")
-            appendLine("app     : ${appVersion(ctx)}")
-            appendLine(deviceInfo())
-            appendLine("doing   : $phase")
-            appendLine("thread  : ${thread.name}")
-            appendLine("safeMode: ${isSafePreview()}")
-            appendLine()
-            append(Log.getStackTraceString(throwable))
-        }
+        val report = CrashReportText.body(
+            time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(now),
+            appVersion = appVersion(ctx),
+            deviceLine = deviceLine(),
+            androidLine = androidLine(),
+            phase = phase,
+            threadName = thread.name,
+            safeMode = isSafePreview(),
+            stackTrace = Log.getStackTraceString(throwable),
+        )
         crashDir()?.let { dir ->
             runCatching { File(dir, "crash-$stamp.txt").writeText(report) }
             // Keep only the most recent few reports.
@@ -84,11 +83,21 @@ object CrashReporter {
             ?.commit()
     }
 
-    fun deviceInfo(): String {
+    fun deviceLine(): String {
         val soc = if (Build.VERSION.SDK_INT >= 31) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}" else Build.HARDWARE
-        return "device  : ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE}); soc: $soc\n" +
-            "android : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+        return "device  : ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE}); soc: $soc"
     }
+
+    fun androidLine(): String = "android : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+
+    fun deviceInfo(): String = deviceLine() + "\n" + androidLine()
+
+    /** Email subject naming the device, e.g. "ProGallery Crash Report - samsung SM-F946B". */
+    fun emailSubject(): String = CrashReportText.subject(Build.MANUFACTURER ?: "", Build.MODEL ?: "")
+
+    fun whatsIncluded(): String = CrashReportText.whatsIncluded()
+    fun nativeNote(): String = CrashReportText.nativeNote()
+    const val EMAIL: String = CrashReportText.EMAIL
 
     private fun appVersion(ctx: Context): String = runCatching {
         val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)

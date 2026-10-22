@@ -72,5 +72,17 @@
             android:name=".video.VideoExportService"
             android:exported="false"
             android:foregroundServiceType="dataSync|mediaProcessing" />
+
+        <!-- Lets the user attach a crash-report .txt to an email/share intent. Local only;
+             grants temporary read access to the chosen app. No network is involved. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

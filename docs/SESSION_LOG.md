@@ -201,3 +201,23 @@ unreliable.
 - Reminder to self: the CI build job's unit-test/assemble steps use continue-on-error; the REAL
   pass/fail is in ci-results SUMMARY.txt (core_tests/app_tests/assemble/lint outcomes), not the
   masked step conclusions. (A missing import in 0.4.1 was caught this way.)
+
+## 2026-10-22 — Session 10 (v0.4.3, email crash reports)
+- Shane asked to add emailing crash reports to shanebl030@gmail.com: next-launch dialog with
+  Send Crash Report / View Report / Not Now; permanent Settings > Diagnostics to view/share/email
+  the latest report; privacy (never auto-send, explain contents, exclude media/projects); standard
+  email/share intents with a fallback if no email app; keep no-INTERNET; explain native crashes.
+- Built on the 0.4.1 CrashReporter:
+  - CrashReportText (pure, JVM-tested): email subject, privacy "what's included" text, native note,
+    and the report body format — so report/subject/privacy wording are unit-tested without a device.
+  - CrashReporter now builds the report via CrashReportText and exposes emailSubject()/whatsIncluded()
+    /nativeNote()/EMAIL + deviceLine()/androidLine().
+  - FileProvider ("${applicationId}.fileprovider" + res/xml/file_paths.xml for filesDir/crashes/) to
+    attach the report .txt; ui/Diagnostics.kt has buildCrashEmailIntent/emailCrashReport/
+    shareCrashReport/copyToClipboard + a DiagnosticsDialog. Fallback to clipboard if nothing can send.
+  - CrashReportDialog restructured to Send/View/Not Now with privacy + native-crash notes; Settings
+    Diagnostics opens DiagnosticsDialog.
+- No INTERNET permission added (verified kept); sending is via the user's chosen app only.
+- Tests: CrashReportTextTest (4 JVM, pass locally via kotlinc); DiagnosticsDeviceTest (instrumented:
+  FileProvider attachment + email intent extras) — compiles, NOT run (no device / emulator down).
+- Still no Fold5 crash report received; this feature is the mechanism to get it.

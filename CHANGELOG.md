@@ -2,6 +2,40 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.3] — 2026-10-22 — email crash reports
+
+Adds a way to email crash reports (so the Galaxy Z Fold5 crash can be diagnosed from the exact
+report). Everything stays user-initiated and offline — ProGallery still has no INTERNET permission.
+
+### Added
+- **Send crash reports by email.** The next-launch dialog after a crash now offers:
+  - **Send Crash Report** — opens the user's email/share app with `shanebl030@gmail.com` prefilled,
+    subject `ProGallery Crash Report - <make> <model>` (e.g. `… - samsung SM-F946B`), the full report
+    as the message body, and the report attached as a readable **.txt** file (via a local FileProvider).
+  - **View Report** — review the full report (device, Android version, app version, the editing step
+    that was running, and the complete stack trace) before sending.
+  - **Not Now** — dismiss without deleting the report (it stays available in Diagnostics).
+- **Settings › Diagnostics** now opens a panel to **view, email or share the most recent crash
+  report** at any time, even days later (the last few reports are kept on the device).
+- The dialog states plainly **what the report contains and excludes** (no photos, videos, projects or
+  personal media) and that **nothing is ever sent automatically** — only through the app you pick.
+
+### Privacy / offline
+- No automatic sending and **no INTERNET permission** — reports leave the phone only through the
+  email/share app the user chooses. If no app can send, the report is copied to the clipboard as a
+  fallback and remains in Diagnostics.
+- Reports contain only diagnostic text (exception + stack trace, device make/model, Android + app
+  version, current editing step). Native crashes that occur before a report can be written are
+  explained in the dialog/Diagnostics (a device logcat is needed for those).
+
+### Testing (JVM + instrumented; not run on a physical Samsung device)
+- **4 JVM unit tests** for the report/subject/privacy-text formatting (`CrashReportTextTest`).
+- Instrumented tests (`DiagnosticsDeviceTest`) for the FileProvider attachment and the email intent's
+  recipient/subject/body/attachment — these **compile** and are ready to run; they have **not** been
+  run on a device or the CI emulator (emulator outage continues).
+- All previous editing features, transitions, Safe preview mode, 0.4.2 compatibility work, saved
+  projects, settings, app icon, signing key and the author credit are unchanged.
+
 ## [0.4.2] — 2026-10-22 — Android 13+ / Samsung Galaxy compatibility
 
 Broadens robustness across Samsung Galaxy devices (S, Z Fold, Z Flip, A series) on Android 13
