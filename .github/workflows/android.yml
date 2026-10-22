@@ -140,7 +140,10 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Build app and test APKs
-        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace
+        run: |
+          mkdir -p device-out
+          set -o pipefail
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace 2>&1 | tee device-out/build-apks.log
 
       - name: Run instrumented tests on emulator (Android 14)
         timeout-minutes: 85
