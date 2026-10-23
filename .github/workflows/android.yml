@@ -146,7 +146,7 @@ jobs:
           ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace 2>&1 | tee device-out/build-apks.log
 
       - name: Run instrumented tests on emulator (Android 14)
-        timeout-minutes: 85
+        timeout-minutes: 100
         run: bash .github/scripts/run-emulator.sh
 
       - uses: actions/upload-artifact@v4

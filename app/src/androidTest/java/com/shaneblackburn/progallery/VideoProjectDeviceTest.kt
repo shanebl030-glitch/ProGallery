@@ -27,7 +27,9 @@ import com.shaneblackburn.progallery.core.video.VideoFilter
 import com.shaneblackburn.progallery.core.video.VideoProject
 import com.shaneblackburn.progallery.data.LoadResult
 import com.shaneblackburn.progallery.data.MediaRepository
+import com.shaneblackburn.progallery.video.ExportResolution
 import com.shaneblackburn.progallery.video.ProjectComposer
+import com.shaneblackburn.progallery.video.VideoExportSettings
 import com.shaneblackburn.progallery.video.ProjectStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -73,7 +75,11 @@ class VideoProjectDeviceTest {
 
     private class Exported(val file: File, val durationMs: Long, val width: Int, val height: Int, val hasAudio: Boolean)
 
-    private fun export(project: VideoProject, name: String): Exported {
+    // Render test exports at SD (480p short side) so the full-pipeline GL exports stay light on the
+    // CI's software-GL emulator (the per-pixel hf/luma/diff metrics are resolution-independent, so
+    // the assertions are unchanged — only the fill cost, and thus the run time, drops).
+    private fun export(project: VideoProject, name: String,
+                       settings: VideoExportSettings = VideoExportSettings(resolution = ExportResolution.SD)): Exported {
         val out = File(ctx.cacheDir, "$name.mp4").apply { delete() }
         val latch = CountDownLatch(1)
         var error: ExportException? = null
@@ -84,7 +90,7 @@ class VideoProjectDeviceTest {
                     override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
                         error = exportException; latch.countDown()
                     }
-                }).build().start(ProjectComposer.build(project), out.absolutePath)
+                }).build().start(ProjectComposer.build(project, settings), out.absolutePath)
         }
         assertTrue(latch.await(240, TimeUnit.SECONDS), "export timed out")
         error?.let { throw AssertionError("export failed: ${it.errorCodeName}", it) }
