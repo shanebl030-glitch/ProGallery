@@ -198,7 +198,10 @@ class PlaybackSyncDeviceTest {
                     continue
                 }
                 Thread.sleep(250) // let the final composited frame settle
-                val shown = latest ?: run { failures += "no frame captured at ${tMs}ms"; continue }
+                // NB: `continue` must not sit inside an inline lambda (run {}/let {}) — Kotlin 2.1
+                // only allows break/continue in inline lambdas from language version 2.2.
+                val shown = latest
+                if (shown == null) { failures += "no frame captured at ${tMs}ms"; continue }
 
                 val srcHere = sourceSignature(clip.uri, project.locate(tMs)!!.sourceMs)
                 val srcLo = sourceSignature(clip.uri, project.locate((duration * 0.05).toLong())!!.sourceMs)
