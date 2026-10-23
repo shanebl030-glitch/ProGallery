@@ -2,6 +2,31 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.9] — 2026-10-23 — blur genuinely softens (on-device), sync confirmed on-device
+
+The device suite finally ran a clean compile+emulator pass, giving real on-device evidence.
+
+### Confirmed on-device (Android 14 emulator)
+- **Timeline/preview sync — PASS.** `previewTimelineMatchesProjectTimeline` shows the preview
+  engine's own duration equals the project timeline the playhead is computed from, and seeks land
+  exactly where asked, for both an uncut and a trimmed clip:
+  `uncut: timeline=4023 playerDur=4023 seek 2011→2011` · `trimmed: timeline=2023 playerDur=2023 seek 1011→1011`.
+  This is engine-level confirmation that the sync work (v0.4.8) holds; the on-screen feel is still
+  for Shane to confirm on the Fold5.
+- Whip-pan and Push transitions pass (correctly treated as passing through black at the cut).
+
+### Fixed — Blur transition now actually softens
+- On-device, the v0.4.8 "dense Gaussian" blur still *raised* high-frequency at the cut
+  (hf 5.96 vs plain 5.35). Root cause: the GLSL kernel read its weights from an array indexed by
+  the loop variable (`gw[i+2]`), and GL ES 1.00 software GL indexes such arrays unreliably — so the
+  weights were effectively wrong and the "blur" ghosted instead of smoothing.
+- Replaced with a **49-tap (7×7) Gaussian whose weight `exp(-(i²+j²)/8)` is computed
+  arithmetically** (no array indexing), taps spanning ±radius at step = radius/3, and widened the
+  max blur radius (`MAX_BLUR_UV` 0.05 → 0.07). Changed in lockstep in the GPU shader
+  (`ClipTransitionEffect`) and the CPU reference (`TransitionCpu`).
+- *Status:* unit tests pass; the on-device hf-reduction is confirmed by the re-run reported with
+  this release.
+
 ## [0.4.8] — 2026-10-23 — timeline/preview synchronisation
 
 Shane reported the timeline playhead and the video preview drifting out of sync even on a single,

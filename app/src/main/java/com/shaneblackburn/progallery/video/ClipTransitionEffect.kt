@@ -133,21 +133,22 @@ vec3 tap(vec2 uv) {
   return texture2D(uTexSampler, uv).rgb;
 }
 
-// 25-tap (5x5) Gaussian blur. Taps spaced at half the radius (step = uBlur/2) so neighbouring
-// samples overlap into a smooth ramp. A sparse kernel lays down ghost copies of sharp edges and
-// RAISES high-frequency detail on real video; this denser kernel genuinely softens. Kept in
-// lockstep with TransitionCpu.sampleBlur (gw = 1-D Gaussian sigma=1).
+// 49-tap (7x7) Gaussian blur. The weight exp(-(i*i+j*j)/8) (sigma ~2 taps) is computed
+// ARITHMETICALLY rather than read from a weights array indexed by the loop variable: GL ES 1.00
+// drivers (notably the CI emulator's software GL) index such arrays unreliably, which left the
+// weights wrong and the blur RAISING high-frequency instead of reducing it. Taps span +/- uBlur at
+// step = uBlur/3, dense enough to genuinely soften rather than ghost. In lockstep with
+// TransitionCpu.sampleBlur.
 vec3 sampleBlur(vec2 uv) {
   if (uBlur <= 0.0) return tap(uv);
-  float step = uBlur * 0.5;
-  float gw[5];
-  gw[0] = 0.1353; gw[1] = 0.6065; gw[2] = 1.0; gw[3] = 0.6065; gw[4] = 0.1353;
+  float step = uBlur / 3.0;
   vec3 acc = vec3(0.0);
   float wsum = 0.0;
-  for (int i = -2; i <= 2; i++) {
-    for (int j = -2; j <= 2; j++) {
-      float w = gw[i + 2] * gw[j + 2];
-      acc += tap(uv + vec2(float(i) * step, float(j) * step)) * w;
+  for (int i = -3; i <= 3; i++) {
+    for (int j = -3; j <= 3; j++) {
+      float d2 = float(i * i + j * j);
+      float w = exp(-d2 / 8.0);
+      acc += tap(uv + vec2(float(i), float(j)) * step) * w;
       wsum += w;
     }
   }

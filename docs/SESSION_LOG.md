@@ -346,3 +346,23 @@ unreliable.
 - Bumped to versionCode 14 / versionName 0.4.8. Next: push, let CI build+unit+lint+assemble verify
   compilation, download the release APK, sign with the permanent key, androguard-verify, deliver;
   report device-test outcome honestly; Shane verifies sync on his Fold5.
+
+## 2026-10-23 — Session 16 (v0.4.9, blur really softens + sync confirmed on-device)
+- First clean compile+emulator device run (after fixing the androidTest compile blocker: a
+  `continue` inside err?.let{} — illegal under Kotlin 2.1; also made headless preview cases skip).
+- Device evidence (run on Android 14 emulator):
+  * SYNC PASS: previewTimelineMatchesProjectTimeline — playerDur == project timeline and seeks land
+    exactly, for uncut (4023/4023, seek 2011→2011) AND trimmed (2023/2023, seek 1011→1011). Engine-
+    level confirmation the v0.4.8 sync work holds. On-screen feel still for Shane's Fold5.
+  * Whip/Push pass (through-black recategorisation correct).
+  * BLUR still FAILED: hf 5.96 vs plain 5.35 (needs < 4.81). The v0.4.8 25-tap Gaussian still raised
+    hf — root cause: GLSL read weights from gw[i+2], an array indexed by the loop variable, which
+    GL ES 1.00 software GL indexes unreliably → wrong weights → ghosting, not smoothing.
+- Fix: replaced the kernel with a 49-tap (7x7) Gaussian computing weight exp(-(i*i+j*j)/8)
+  ARITHMETICALLY (no array indexing), step=radius/3 spanning ±radius; widened MAX_BLUR_UV 0.05→0.07.
+  Updated in lockstep in ClipTransitionEffect (GLSL) + TransitionCpu (CPU ref). 89 core tests pass.
+- Bumped to versionCode 15 / versionName 0.4.9. Next: push, confirm BLUR now softens on the emulator
+  re-run (device suite now compiles+runs), re-sign + deliver 0.4.9 if green; Shane verifies on Fold5.
+- NOTE for future-me: CI logs live on an Azure blob host this dev env can't reach; the workflow now
+  tees the androidTest build log to device-out → committed to the ci-results branch (git-readable).
+  Fetch device results via `git show origin/ci-results:SUMMARY.txt` and `:device/logcat.txt`.

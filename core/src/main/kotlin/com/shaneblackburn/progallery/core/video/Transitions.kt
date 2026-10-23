@@ -2,6 +2,7 @@ package com.shaneblackburn.progallery.core.video
 
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.sin
@@ -167,7 +168,7 @@ data class TransitionUniforms(
     companion object {
         val IDENTITY = TransitionUniforms()
         /** Max blur radius as a fraction of the frame (shared by shader + CPU reference). */
-        const val MAX_BLUR_UV = 0.05f
+        const val MAX_BLUR_UV = 0.07f
         /** Max zoom punch-in/out factor. */
         const val MAX_ZOOM = 0.8f
         /** Max spin angle (radians) at the cut. */
@@ -289,9 +290,6 @@ data class TransitionSample(
  * returns black.
  */
 object TransitionCpu {
-    /** 1-D Gaussian weights (sigma=1), outer-product'd for the 5x5 blur kernel. */
-    private val GAUSS1D = floatArrayOf(0.1353f, 0.6065f, 1f, 0.6065f, 0.1353f)
-
     private fun hash(x: Float): Float {
         val s = sin(x * 12.9898f) * 43758.547f
         return s - floor(s)
@@ -309,22 +307,23 @@ object TransitionCpu {
     }
 
     /**
-     * 25-tap (5x5) Gaussian blur in UV space; [blur] is the radius as a fraction of the frame.
-     * Taps are spaced at half the radius (step = blur/2) so neighbouring samples overlap into a
-     * smooth ramp. A sparse kernel with widely-spaced taps lays down ghost copies of sharp edges
-     * instead of softening them, which on real video content *raises* high-frequency detail rather
-     * than reducing it (observed on-device: BLUR hf went up, not down). GAUSS1D is a 1-D Gaussian
-     * (sigma=1); the 2-D weight is its outer product, normalised by the running weight sum.
+     * 49-tap (7x7) Gaussian blur in UV space; [blur] is the radius as a fraction of the frame.
+     * The 2-D weight exp(-(i²+j²)/8) (sigma≈2 taps) is computed arithmetically — deliberately NOT
+     * read from a weights array indexed by the loop variable, because GL ES 1.00 drivers (the CI
+     * emulator's software GL in particular) index such arrays unreliably, which left the weights
+     * wrong and the blur *raising* high-frequency instead of reducing it. Taps span ±[blur] at
+     * step = blur/3 so the kernel is dense enough to genuinely soften rather than ghost. Kept in
+     * exact lockstep with ClipTransitionEffect.sampleBlur.
      */
     private fun sampleBlur(src: (Float, Float) -> FloatArray, u: Float, v: Float, blur: Float): FloatArray {
         val acc = FloatArray(3)
         val t = FloatArray(3)
         if (blur <= 0f) { tap(src, u, v, acc); return acc }
-        val step = blur * 0.5f
+        val step = blur / 3f
         var wsum = 0f
-        for (i in -2..2) {
-            for (j in -2..2) {
-                val w = GAUSS1D[i + 2] * GAUSS1D[j + 2]
+        for (i in -3..3) {
+            for (j in -3..3) {
+                val w = exp(-(i * i + j * j).toFloat() / 8f)
                 tap(src, u + i * step, v + j * step, t)
                 acc[0] += t[0] * w; acc[1] += t[1] * w; acc[2] += t[2] * w
                 wsum += w
