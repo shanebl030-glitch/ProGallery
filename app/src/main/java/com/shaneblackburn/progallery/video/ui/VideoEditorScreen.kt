@@ -90,6 +90,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.sample
 import kotlin.math.roundToInt
 
 /** How the video editor was opened. */
@@ -161,6 +162,20 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     var safeMode by remember { mutableStateOf(com.shaneblackburn.progallery.CrashReporter.isSafePreview()) }
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
+    // Scroll the timeline programmatically to [ms], flagging it so the scrub collector doesn't treat
+    // the move as a user drag. CRITICAL: the flag is cleared in a finally, because scroll.scrollTo is
+    // a suspend call and this runs inside coroutines that get CANCELLED when `playing` flips (pause /
+    // playback end) mid-scroll — without finally the cancellation would skip clearing the flag,
+    // leaving programmaticScroll stuck true, after which scrubbing never updates positionMs and the
+    // preview freezes while the playhead/thumbnails move freely (the reported desync, in both modes).
+    val scrollToMs: suspend (Long) -> Unit = { ms ->
+        programmaticScroll = true
+        try {
+            scroll.scrollTo(TimelineMath.scrollPxForMs(ms, pxPerMs))
+        } finally {
+            programmaticScroll = false
+        }
+    }
     LaunchedEffect(Unit) { com.shaneblackburn.progallery.CrashReporter.setPhase("video:editor") }
 
     // A brand-new project has been written to storage: let the caller switch to its saved route.
@@ -222,14 +237,12 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     // the timecode and where the timeline is scrolled. It is written by exactly one driver at a
     // time: the player while playing, the user while scrubbing, or an explicit seek/frame-step.
     //
-    // Heavy seeks (CompositionPlayer decodes from the previous keyframe through the target, then
-    // composites on the GPU) are seeked only once the drag SETTLES for a moment — not on every
-    // scroll frame. Firing ~16×/s on long-GOP footage buries the compositor, so the surface trails
-    // the finger and can settle on a stale composited frame from an earlier seek (position correct,
-    // visible frame wrong). The playhead/timecode follow the finger live (positionMs below); the
-    // preview catches up whenever the drag pauses, and lands exactly on release (further below).
+    // Preview seeks are throttled latest-wins (~15×/s) so a fast drag can't flood the player; the
+    // player supersedes any in-flight seek, so this converges on the newest target. The playhead,
+    // timecode and timeline all track the finger live (positionMs below); the final resting frame
+    // is always seeked exactly on release (further below).
     LaunchedEffect(Unit) {
-        pendingSeekMs.filter { it >= 0 }.debounce(90).collect { preview.seekTo(it) }
+        pendingSeekMs.filter { it >= 0 }.sample(66).collect { preview.seekTo(it) }
     }
     // While playing, the player's clock is the single source of truth: follow its position on
     // every animation frame (vsync-aligned, not a fixed 33 ms timer) so the playhead and timecode
@@ -242,16 +255,12 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             while (playing) {
                 withFrameMillis { } // wait for the next frame, then sample the player
                 positionMs = preview.currentPositionMs.coerceIn(0, maxOf(0, project.durationMs))
-                programmaticScroll = true
-                scroll.scrollTo(TimelineMath.scrollPxForMs(positionMs, pxPerMs))
-                programmaticScroll = false
+                scrollToMs(positionMs)
             }
         } else if (!scrubbing) {
             // Stopped and the user isn't dragging: align exactly to where the player really is.
             positionMs = preview.currentPositionMs.coerceIn(0, maxOf(0, project.durationMs))
-            programmaticScroll = true
-            scroll.scrollTo(TimelineMath.scrollPxForMs(positionMs, pxPerMs))
-            programmaticScroll = false
+            scrollToMs(positionMs)
         }
     }
     // While the user drags the timeline, the scroll drives: move the playhead with the finger
@@ -353,11 +362,7 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
         val seekTo: (Long) -> Unit = { ms ->
             positionMs = ms.coerceIn(0, maxOf(0, project.durationMs))
             preview.seekTo(positionMs)
-            scope.launch {
-                programmaticScroll = true
-                scroll.scrollTo(TimelineMath.scrollPxForMs(positionMs, pxPerMs))
-                programmaticScroll = false
-            }
+            scope.launch { scrollToMs(positionMs) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {

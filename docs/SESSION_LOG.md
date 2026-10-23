@@ -403,3 +403,23 @@ unreliable.
   ("Failed to start Emulator console") so the surface test couldn't run. Scrub fix is reasoned;
   Shane's Fold5 is the confirmation.
 - Bumped versionCode 17 / versionName 0.4.11. Build + sign + deliver.
+
+## 2026-10-24 — Session 19 (v0.4.12, REAL root cause: stuck programmatic-scroll flag)
+- Shane: still out of sync (same/worse) after v0.4.11, with screenshot. Asked him to test SAFE
+  PREVIEW MODE (different player, same timeline code). Result: ALSO out of sync → bug is in SHARED
+  timeline code, NOT CompositionPlayer. v0.4.11 (debounce) was the wrong direction.
+- ROOT CAUSE: `programmaticScroll = true; scroll.scrollTo(...); programmaticScroll = false`.
+  scroll.scrollTo is suspend; the playback follow loop runs it in LaunchedEffect(playing), which is
+  CANCELLED when playback stops. If cancelled mid-scrollTo (~half the time — loop alternates
+  withFrameMillis/scrollTo), the unwind SKIPS `= false`, so programmaticScroll stays stuck true.
+  Then the scrub guard (!playing && !programmaticScroll) is always false → positionMs stops updating
+  while scrolling → playhead/timecode/thumbnails move but preview stays frozen. Both modes. Play→
+  pause→scrub triggers it. Pre-dates this whole session = the original desync.
+- FIX: clear the flag in a finally. One guarded helper scrollToMs(ms) used by all 3 scroll sites
+  (follow loop, pause-align, seek/frame-step). Reverted v0.4.11 debounce → sample(66) (responsive).
+  89 core tests pass; androidTest compiles.
+- NOT device-verified (emulator outage). Deterministic cancellation fix, strong symptom match.
+- Bumped versionCode 18 / 0.4.12. Build + sign + deliver.
+- LESSON: my timestamp test (v0.4.8) and CompositionPlayer theories (v0.4.11) missed this because
+  the bug is in the Compose coroutine lifecycle, not the player. The Safe-mode diagnostic localised
+  it in one step — should have asked for that earlier.

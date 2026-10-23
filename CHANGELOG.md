@@ -2,6 +2,40 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.12] — 2026-10-24 — timeline/preview desync: the real root cause (stuck programmatic-scroll flag)
+
+A targeted diagnostic (Safe preview mode — a different player, same timeline code — was ALSO out of
+sync) proved the fault was in the SHARED timeline code, not the effects preview engine. That ruled
+out v0.4.11's direction.
+
+### Root cause
+Every programmatic timeline scroll ran `programmaticScroll = true; scroll.scrollTo(...);
+programmaticScroll = false`, and `scroll.scrollTo` is a suspend call. The playback follow loop runs
+it inside `LaunchedEffect(playing)`, which is CANCELLED the instant playback stops (pause or end). If
+the cancellation lands while `scrollTo` is suspended — about half the time, since the loop alternates
+`withFrameMillis` and `scrollTo` — the cancellation unwind SKIPS `programmaticScroll = false`, so the
+flag stays stuck `true`. After that, the scrub handler's guard (`!playing && !programmaticScroll`)
+is permanently false, so **`positionMs` stops updating while you scroll**: the playhead, timecode and
+thumbnails move with your finger, but the preview stays frozen where it was — in BOTH preview modes.
+Play → pause → scrub is exactly the sequence that triggers it, which matches the report. (This bug
+pre-dates this release — it's the original desync.)
+
+### Fixed
+- The programmatic scroll now clears its flag in a `finally`, so cancellation can never leave it
+  stuck. All three scroll sites (playback follow, pause-align, seek/frame-step) go through one
+  guarded helper. `positionMs` now always tracks the timeline, so the preview, playhead, timecode
+  and thumbnails stay together.
+- Reverted v0.4.11's scrub debounce (which made scrubbing feel laggier) back to a responsive
+  latest-wins throttle; the preview still lands exactly on release.
+- No change to the export pipeline, projects, settings, signing key or credit.
+
+### Testing
+- 89 core unit tests pass; the androidTest suite (incl. the ImageReader preview-surface test added in
+  0.4.11) compiles.
+- **Not device-verified**: the GitHub Actions emulator is still in its outage. This is a
+  deterministic coroutine-cancellation fix with a clear symptom match; Shane's Fold5 is the
+  confirmation. Diagnostic that localised it: Safe preview mode was also out of sync → shared code.
+
 ## [0.4.11] — 2026-10-24 — scrub preview frame (stop burying the compositor)
 
 Shane reported (with screenshots) that the preview frame still doesn't match the playhead, at rest.
