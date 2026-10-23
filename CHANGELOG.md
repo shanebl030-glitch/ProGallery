@@ -2,6 +2,45 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.11] — 2026-10-24 — scrub preview frame (stop burying the compositor)
+
+Shane reported (with screenshots) that the preview frame still doesn't match the playhead, at rest.
+Re-traced the whole path and corrected the earlier diagnosis.
+
+### What was re-checked and ruled out
+- **Timeline geometry / mapping**: playhead is screen-centred with a leading half-viewport spacer,
+  so time-under-playhead = scroll/pxPerMs — exactly what the scrub handler and the preview seek use.
+  Timeline thumbnails are sampled across the source and tiled onto the trimmed strip at matching
+  positions. The position→time→source-frame mapping is correct.
+- **Seek accuracy**: `CompositionPlayer` forwards seeks to internal ExoPlayers whose default is
+  `SeekParameters.EXACT`, and it reports the exact position — which is why the previous
+  timestamp-only test passed and was insufficient (as Shane rightly called out).
+
+### Root cause (preview surface, not the timeline maths)
+On long-GOP footage (e.g. DJI drone clips) each exact seek decodes from the previous keyframe, then
+goes through the GL compositor. The scrub code fired ~16 seeks/second, which buries that pipeline:
+the surface trails the finger and can settle on a **stale composited frame from an earlier seek** —
+position correct, visible frame wrong. `CompositionPlayer` exposes no scrubbing/seek-parameter
+control to make this cheaper.
+
+### Changed
+- Scrub now seeks the (heavy, effects) preview only once the drag **settles for ~90 ms**, instead
+  of on every scroll frame, and **cancels any pending seek on release** before the final exact seek.
+  The playhead/timecode still follow the finger live; the preview catches up when the drag pauses
+  and lands exactly on release — without a backlog of competing seeks leaving a stale frame.
+- No change to the export pipeline, saved projects, settings, signing key or credit.
+
+### Testing
+- New on-device test `previewSurfaceShowsTheFrameForTheSeekPosition` renders the preview into an
+  `ImageReader` and checks the ACTUALLY-RENDERED frame (not the reported timestamp) matches the
+  clip's source frame at the mapped position — and is closer to it than to frames well before/after.
+  This is the frame-vs-position check Shane asked for; it skips cleanly if the emulator can't present
+  frames headlessly.
+- 89 core unit tests pass; the androidTest suite compiles on CI.
+- **Not yet verified on-device**: the GitHub Actions emulator has been in a multi-hour outage
+  ("Failed to start Emulator console"), so the new surface test hasn't been able to run. The scrub
+  change is a reasoned fix for the identified cause; final confirmation is Shane's Fold5.
+
 ## [0.4.10] — 2026-10-23 — blur edge-clamp (removes the dark halo that defeated softening)
 
 On-device, v0.4.9's 49-tap Gaussian still measured hf 5.68 at the cut vs plain 5.35 (needs < 4.81).

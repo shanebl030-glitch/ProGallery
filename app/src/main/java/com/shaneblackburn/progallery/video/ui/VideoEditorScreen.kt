@@ -90,7 +90,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.sample
 import kotlin.math.roundToInt
 
 /** How the video editor was opened. */
@@ -223,12 +222,14 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     // the timecode and where the timeline is scrolled. It is written by exactly one driver at a
     // time: the player while playing, the user while scrubbing, or an explicit seek/frame-step.
     //
-    // Heavy seeks (CompositionPlayer.seekTo rebuilds the decode pipeline) are throttled and
-    // latest-wins: while scrubbing we push targets here and seek at most ~16×/s to the newest one,
-    // so a fast drag can't flood the player and leave the preview lagging on stale frames. The
-    // final resting frame is always seeked exactly when the drag ends.
+    // Heavy seeks (CompositionPlayer decodes from the previous keyframe through the target, then
+    // composites on the GPU) are seeked only once the drag SETTLES for a moment — not on every
+    // scroll frame. Firing ~16×/s on long-GOP footage buries the compositor, so the surface trails
+    // the finger and can settle on a stale composited frame from an earlier seek (position correct,
+    // visible frame wrong). The playhead/timecode follow the finger live (positionMs below); the
+    // preview catches up whenever the drag pauses, and lands exactly on release (further below).
     LaunchedEffect(Unit) {
-        pendingSeekMs.filter { it >= 0 }.sample(60).collect { preview.seekTo(it) }
+        pendingSeekMs.filter { it >= 0 }.debounce(90).collect { preview.seekTo(it) }
     }
     // While playing, the player's clock is the single source of truth: follow its position on
     // every animation frame (vsync-aligned, not a fixed 33 ms timer) so the playhead and timecode
@@ -267,7 +268,8 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                 }
                 !active && scrubbing -> {
                     scrubbing = false
-                    preview.seekTo(positionMs) // land exactly on the resting frame
+                    pendingSeekMs.value = -1L   // cancel any pending debounced seek…
+                    preview.seekTo(positionMs)  // …and land exactly on the resting frame now
                 }
             }
         }

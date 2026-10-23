@@ -382,3 +382,24 @@ unreliable.
   drops below plain, re-sign + deliver 0.4.10.
 - Reminder: CI emulator is very flaky (dead console / hung boot / crash); ~1 in 4-5 runs produce
   results. Retry loop with per-attempt cap + cancel-stuck lives in scratchpad/retry2.sh.
+
+## 2026-10-24 — Session 18 (v0.4.11, scrub preview frame — real root cause)
+- Shane re-reported preview≠playhead WITH screenshots (DJI drone footage, long clips). My earlier
+  timestamp-based "confirmation" was insufficient — he called that out explicitly.
+- Re-traced: geometry/mapping correct (centre playhead + half-viewport spacer => time=scroll/pxPerMs;
+  thumbnails sampled across source, tiled onto trimmed strip at matching positions). Seeks exact
+  (ExoPlayer default SeekParameters.EXACT; CompositionPlayer reports exact position — hence the old
+  test passed). CompositionPlayer exposes NO seek-parameter/scrubbing control (checked 1.5.1 source).
+- Root cause = preview SURFACE, not timeline maths: on long-GOP footage each exact seek decodes from
+  the prior keyframe + GL composite; scrub fired ~16 seeks/s, burying the compositor so the surface
+  trails and can settle on a STALE composited frame from an earlier seek (position right, frame wrong).
+- Fix: scrub seeks the preview only after the drag settles ~90ms (debounce, was sample 60ms) and
+  cancels the pending seek on release before the final exact seek. Playhead/timecode still follow the
+  finger live. Export/projects/settings/key/credit untouched.
+- Test: new PlaybackSyncDeviceTest.previewSurfaceShowsTheFrameForTheSeekPosition renders the preview
+  into an ImageReader and compares the ACTUAL rendered frame (8x8 grey signature) to the source frame
+  at the mapped position (closest-match, not timestamp). Skips if emulator can't present frames.
+- 89 core tests pass; androidTest compiles. NOT verified on-device: GitHub emulator still in outage
+  ("Failed to start Emulator console") so the surface test couldn't run. Scrub fix is reasoned;
+  Shane's Fold5 is the confirmation.
+- Bumped versionCode 17 / versionName 0.4.11. Build + sign + deliver.
