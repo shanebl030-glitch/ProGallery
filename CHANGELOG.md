@@ -2,6 +2,24 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.10] — 2026-10-23 — blur edge-clamp (removes the dark halo that defeated softening)
+
+On-device, v0.4.9's 49-tap Gaussian still measured hf 5.68 at the cut vs plain 5.35 (needs < 4.81).
+Root cause: near the frame border the blur sampled **off-frame pixels as black**, building a dark
+halo that *added* high-frequency at the edges and swamped the interior softening (diffCut jumped to
+~31, consistent with a visible dark border).
+
+### Fixed
+- Blur taps now **edge-clamp** to the frame ([0,1]) — repeating the border pixel instead of pulling
+  in black — the standard artifact-free blur. The sample *centre* being off-frame still returns
+  black, so whip-pan/push keep sliding through black by design. Changed in lockstep in the GPU
+  shader (`ClipTransitionEffect`, sampling `texture2D` directly for the clamped coords) and the CPU
+  reference (`TransitionCpu`). 89 core unit tests pass; on-device hf confirmed by the re-run reported
+  with this release.
+
+### Still confirmed on-device
+- Sync: `uncut 4023/4023 seek 2011→2011`, `trimmed 2023/2023 seek 1011→1011`; whip/push pass.
+
 ## [0.4.9] — 2026-10-23 — blur genuinely softens (on-device), sync confirmed on-device
 
 The device suite finally ran a clean compile+emulator pass, giving real on-device evidence.

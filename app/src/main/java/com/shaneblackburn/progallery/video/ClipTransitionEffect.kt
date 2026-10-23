@@ -141,6 +141,12 @@ vec3 tap(vec2 uv) {
 // TransitionCpu.sampleBlur.
 vec3 sampleBlur(vec2 uv) {
   if (uBlur <= 0.0) return tap(uv);
+  // Centre off-frame (content slid off for whip/push): stay black, like a plain tap.
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec3(0.0);
+  // Otherwise EDGE-CLAMP neighbour taps to [0,1] rather than sampling off-frame black: a black
+  // border halo *adds* high-frequency at the edges and defeats the blur (observed on-device: BLUR
+  // hf stayed above the plain cut). Clamping repeats the edge pixel — the standard artifact-free
+  // blur. texture2D directly (not tap()) so the clamped, in-bounds coords aren't re-zeroed.
   float step = uBlur / 3.0;
   vec3 acc = vec3(0.0);
   float wsum = 0.0;
@@ -148,7 +154,8 @@ vec3 sampleBlur(vec2 uv) {
     for (int j = -3; j <= 3; j++) {
       float d2 = float(i * i + j * j);
       float w = exp(-d2 / 8.0);
-      acc += tap(uv + vec2(float(i), float(j)) * step) * w;
+      vec2 c = clamp(uv + vec2(float(i), float(j)) * step, 0.0, 1.0);
+      acc += texture2D(uTexSampler, c).rgb * w;
       wsum += w;
     }
   }

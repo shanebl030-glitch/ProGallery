@@ -319,12 +319,20 @@ object TransitionCpu {
         val acc = FloatArray(3)
         val t = FloatArray(3)
         if (blur <= 0f) { tap(src, u, v, acc); return acc }
+        // If the sample CENTRE is off-frame (e.g. content slid off for whip/push), stay black like a
+        // plain tap. Otherwise EDGE-CLAMP each neighbour tap to [0,1] instead of letting it fall
+        // off-frame into black: sampling black near the frame border builds a dark halo that *adds*
+        // high-frequency detail at the edges and defeats the blur (observed on-device: BLUR hf stayed
+        // above the plain cut). Clamping repeats the edge pixel — the standard artifact-free blur.
+        if (u < 0f || u > 1f || v < 0f || v > 1f) { acc[0] = 0f; acc[1] = 0f; acc[2] = 0f; return acc }
         val step = blur / 3f
         var wsum = 0f
         for (i in -3..3) {
             for (j in -3..3) {
                 val w = exp(-(i * i + j * j).toFloat() / 8f)
-                tap(src, u + i * step, v + j * step, t)
+                val cu = (u + i * step).coerceIn(0f, 1f)
+                val cv = (v + j * step).coerceIn(0f, 1f)
+                tap(src, cu, cv, t)
                 acc[0] += t[0] * w; acc[1] += t[1] * w; acc[2] += t[2] * w
                 wsum += w
             }

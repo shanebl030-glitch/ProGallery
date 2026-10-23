@@ -366,3 +366,19 @@ unreliable.
 - NOTE for future-me: CI logs live on an Azure blob host this dev env can't reach; the workflow now
   tees the androidTest build log to device-out → committed to the ci-results branch (git-readable).
   Fetch device results via `git show origin/ci-results:SUMMARY.txt` and `:device/logcat.txt`.
+
+## 2026-10-23 — Session 17 (v0.4.10, blur edge-clamp)
+- Device re-run (emulator finally cooperated after many flaky attempts) confirmed sync PASS again
+  (uncut 4023/4023 seek 2011→2011; trimmed 2023/2023 seek 1011→1011) but BLUR still failed:
+  hf 5.68 vs plain 5.35 (needs <4.81). v0.4.9's arithmetic Gaussian only moved it 5.96→5.68.
+- Diagnosis: a blur must never RAISE hf above plain, yet it did. Cause = blur taps near the frame
+  border sampled OFF-FRAME as black (tap() returns black outside [0,1]), building a dark halo that
+  adds high-frequency at the edges (diffCut jumped 19.9→30.9 — a visible dark border), swamping the
+  interior softening.
+- Fix: edge-clamp the blur neighbour taps to [0,1] (repeat the border pixel) — standard artifact-free
+  blur. Centre still returns black when off-frame, so whip/push keep sliding through black. Lockstep:
+  ClipTransitionEffect GLSL (texture2D direct on clamped coords) + TransitionCpu. 89 core tests pass.
+- Bumped versionCode 16 / versionName 0.4.10. Next: push, retry device suite to confirm BLUR hf now
+  drops below plain, re-sign + deliver 0.4.10.
+- Reminder: CI emulator is very flaky (dead console / hung boot / crash); ~1 in 4-5 runs produce
+  results. Retry loop with per-attempt cap + cancel-stuck lives in scratchpad/retry2.sh.
