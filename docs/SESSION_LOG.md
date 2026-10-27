@@ -460,6 +460,11 @@ unreliable.
 - Protected/unchanged: all tools, transitions (Blur/Whip/Push code unchanged since v0.4.10), icon,
   settings, saved projects, export, permissions (no INTERNET), permanent signing key, the
   "Created by Shane BlackbuRn" credit.
-- HONEST status: fling-on-release is a sound, matching mechanism; no-fling is the standard remedy and
-  compiles clean in CI. NOT YET verified by me on device — needs the play→drag→release→cut test on the
-  Fold5. If still off, the long-press diagnostic localises it precisely.
+- First CI attempt (commit 4664150) FAILED to compile: `combinedClickable` is `@ExperimentalFoundationApi`
+  and the function-level `@OptIn` wasn't accepted by this Compose/Kotlin toolchain (one error cascaded
+  into app-tests, assemble and lint). Fixed by switching the long-press toggle to the STABLE
+  `Modifier.pointerInput { detectTapGestures(onLongPress = …) }` — no opt-in needed — and reverting the
+  experimental import/opt-in. FlingBehavior/ScrollScope are stable, so the fling fix was unaffected.
+- HONEST status: fling-on-release is a sound, matching mechanism; no-fling is the standard remedy.
+  NOT YET verified by me on device — needs the play→drag→release→cut test on the Fold5. If still off,
+  the long-press diagnostic localises it precisely.

@@ -10,9 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -64,6 +63,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -123,7 +123,7 @@ fun VideoEditorScreen(
     }
 }
 
-@OptIn(UnstableApi::class, ExperimentalFoundationApi::class)
+@OptIn(UnstableApi::class)
 @Composable
 private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, onClose: () -> Unit, onCreated: (String) -> Unit) {
     val vm: VideoEditorViewModel = viewModel()
@@ -408,10 +408,9 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             Text("${Formatters.timecode(positionMs)} / ${Formatters.timecode(project.durationMs)}",
                 style = MaterialTheme.typography.labelMedium, maxLines = 1,
                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { showSyncDebug = !showSyncDebug },
-                    ))
+                    .pointerInput(Unit) {
+                        detectTapGestures(onLongPress = { showSyncDebug = !showSyncDebug })
+                    })
             // Split at the playhead — always available, whatever is selected.
             IconButton(onClick = {
                 val before = project
