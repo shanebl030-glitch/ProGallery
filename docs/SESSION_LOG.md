@@ -438,3 +438,28 @@ unreliable.
   fix — stuck programmaticScroll flag) is committed but UNBUILT until then.
 - v0.4.12 sync fix status: committed (5231978), 89 core unit tests pass locally, compiles locally
   (core). Needs a CI build to produce the signed APK.
+
+## 2026-10-28 — Session 21 (v0.4.13, timeline overshoot/fling + on-screen sync diagnostic)
+- Repo made PUBLIC by Shane → unlimited free Actions. v0.4.12 built green (commit f0e851b: core+app
+  tests, assemble incl. androidTest, lint all success; app-release.apk on ci-results).
+- Fold5 test of v0.4.12 (Shane): "somewhat better but still not in sync, and bad when cutting — it
+  cuts off to where I want it", in Safe preview mode, at a clip boundary while trimming.
+- Root cause (this session): the timeline used the default `horizontalScroll`, which **flings**. On
+  release the scroll keeps gliding and settles PAST the target frame; since positionMs IS the resting
+  scroll, the playhead, the final preview seek AND the split point all land beyond where the finger
+  lifted → "it cuts off to where I want it", and the preview visibly chases the decelerating scroll
+  (reads as "still not in sync"). A scrubber must stop dead on finger-up.
+- Fix: gave `horizontalScroll` a no-op `FlingBehavior` (performFling consumes nothing) in
+  VideoTimeline.kt. Release now rests exactly on the finger-up frame; split happens there. core/app
+  position math untouched.
+- Added an opt-in on-screen sync diagnostic: long-press the timecode toggles a green overlay showing
+  pos (playhead ms), play (preview.currentPositionMs), Δ, preview mode, and the located clip/source.
+  Turns any residual mismatch into readable numbers (screenshot) instead of another guess. Off by
+  default, zero cost when hidden. (VideoEditorScreen.kt: showSyncDebug state + sampler + overlay +
+  combinedClickable on the timecode; added ExperimentalFoundationApi opt-in.)
+- Protected/unchanged: all tools, transitions (Blur/Whip/Push code unchanged since v0.4.10), icon,
+  settings, saved projects, export, permissions (no INTERNET), permanent signing key, the
+  "Created by Shane BlackbuRn" credit.
+- HONEST status: fling-on-release is a sound, matching mechanism; no-fling is the standard remedy and
+  compiles clean in CI. NOT YET verified by me on device — needs the play→drag→release→cut test on the
+  Fold5. If still off, the long-press diagnostic localises it precisely.

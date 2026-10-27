@@ -10,7 +10,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -84,6 +86,7 @@ import com.shaneblackburn.progallery.video.ExportState
 import com.shaneblackburn.progallery.video.PreviewController
 import com.shaneblackburn.progallery.video.VideoEditorViewModel
 import com.shaneblackburn.progallery.video.VideoExportSettings
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -120,7 +123,7 @@ fun VideoEditorScreen(
     }
 }
 
-@OptIn(UnstableApi::class)
+@OptIn(UnstableApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, onClose: () -> Unit, onCreated: (String) -> Unit) {
     val vm: VideoEditorViewModel = viewModel()
@@ -160,6 +163,11 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     // Safe preview mode skips the GPU effects pipeline in the preview (effects still export).
     // Persisted; auto-enabled after a video-editor crash so the device isn't stuck crash-looping.
     var safeMode by remember { mutableStateOf(com.shaneblackburn.progallery.CrashReporter.isSafePreview()) }
+    // Opt-in sync diagnostic (long-press the timecode to toggle). Shows the playhead position, the
+    // player's actual reported position and the frame they map to, so a sync mismatch can be read
+    // off the screen instead of guessed at. Off by default; no cost unless shown.
+    var showSyncDebug by remember { mutableStateOf(false) }
+    var playerPosMs by remember { mutableLongStateOf(0L) }
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     // Scroll the timeline programmatically to [ms], flagging it so the scrub collector doesn't treat
@@ -283,6 +291,10 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             }
         }
     }
+    // Sample the player's real position for the opt-in sync diagnostic (see showSyncDebug).
+    LaunchedEffect(showSyncDebug) {
+        while (showSyncDebug) { playerPosMs = preview.currentPositionMs; delay(120) }
+    }
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val pickMusic = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::setMusic) }
@@ -355,6 +367,22 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                         )
                     }
                 }
+                if (showSyncDebug) {
+                    val loc = project.locate(positionMs)
+                    val delta = positionMs - playerPosMs
+                    val locLine = loc?.let {
+                        "clip ${it.clipIndex + 1}/${project.clips.size}  src ${"%.2f".format(it.sourceMs / 1000.0)}s" +
+                            "  off ${"%.2f".format(it.offsetInClipMs / 1000.0)}s"
+                    } ?: "no clip"
+                    Text(
+                        "SYNC  pos ${"%.2f".format(positionMs / 1000.0)}s   play ${"%.2f".format(playerPosMs / 1000.0)}s" +
+                            "   Δ ${"%+.2f".format(delta / 1000.0)}s\n" +
+                            "${if (simplifiedPreview) "SIMPLE" else "FULL"}${if (safeMode) " (safe)" else ""}  $locLine",
+                        color = Color(0xFF66FF99), style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
             }
         }
 
@@ -378,7 +406,12 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                 Icon(Icons.Outlined.ChevronRight, "Next frame")
             }
             Text("${Formatters.timecode(positionMs)} / ${Formatters.timecode(project.durationMs)}",
-                style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.weight(1f).padding(horizontal = 2.dp))
+                style = MaterialTheme.typography.labelMedium, maxLines = 1,
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { showSyncDebug = !showSyncDebug },
+                    ))
             // Split at the playhead — always available, whatever is selected.
             IconButton(onClick = {
                 val before = project

@@ -2,6 +2,41 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.13] — 2026-10-28 — timeline overshoot on release (fling) + on-screen sync diagnostic
+
+After v0.4.12 fixed the gross freeze (stuck programmatic-scroll flag), testing on the Fold5 showed the
+preview was "somewhat better but still not in sync, and bad when cutting — it cuts off to where I want
+it." That last part is the tell.
+
+### Root cause (cutting / overshoot)
+The timeline used Compose's default `horizontalScroll`, which applies **fling momentum**. A scrubber
+must stop EXACTLY where your finger lifts; with fling, after you release, the timeline keeps gliding
+and decelerates to rest PAST your target frame. Because `positionMs` is the resting scroll position,
+the playhead, the frame the preview finally seeks to, AND the split point all land beyond where you
+let go — so a cut happens later than the frame you were looking at ("it cuts off to where I want it").
+During that post-release glide the throttled preview seek also visibly chases the decelerating scroll,
+which reads as "still not in sync."
+
+### Fix
+- **No fling on the timeline.** `horizontalScroll` is given a no-op `FlingBehavior` whose
+  `performFling` consumes nothing, so the scroll settles on the finger-up position. Release now lands
+  on the exact frame you chose, and the split happens there. (core/app position math unchanged.)
+- **On-screen sync diagnostic (opt-in).** Long-press the timecode to toggle a small green readout over
+  the preview showing `pos` (playhead ms), `play` (the player's actual reported position), their
+  difference `Δ`, the preview mode, and the clip/source the playhead maps to. This turns any remaining
+  mismatch into numbers you can screenshot instead of something I have to guess at. Off by default.
+
+### Protected / unchanged
+All editing tools, transitions, icon, settings, saved projects, export, permissions (still **no
+INTERNET**), the permanent release signing key, and the "Created by Shane BlackbuRn" credit are
+untouched. Blur/Whip/Push transition code is unchanged from v0.4.10.
+
+### Status (honest)
+Fling-on-release is a confirmed mechanism and matches the exact "cuts off to where I want it" report;
+the no-fling fix is the standard remedy and compiles clean in CI. **Not yet verified by me on a real
+device** — needs the play→drag→release→cut test on the Fold5. If it's still off, the long-press
+diagnostic will show exactly where the gap is.
+
 ## [0.4.12] — 2026-10-24 — timeline/preview desync: the real root cause (stuck programmatic-scroll flag)
 
 A targeted diagnostic (Safe preview mode — a different player, same timeline code — was ALSO out of

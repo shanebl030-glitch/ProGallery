@@ -5,6 +5,8 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -90,10 +92,20 @@ fun VideoTimeline(
     var dragIndex by remember { mutableStateOf(-1) }
     var dragDx by remember { mutableFloatStateOf(0f) }
 
+    // No fling on the timeline. A scrubber must stop EXACTLY where the finger lifts: the default
+    // fling glides the timeline past the target frame after release, so the playhead, the resting
+    // preview frame and the split point all land beyond where the user let go — the "it cuts off to
+    // where I want it" overshoot. performFling does nothing and returns the velocity unconsumed, so
+    // the scroll settles on the finger-up position and positionMs == the frame the user chose.
+    val noFling = remember {
+        object : FlingBehavior {
+            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float = initialVelocity
+        }
+    }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val half: Dp = maxWidth / 2
         val totalPx = project.durationMs * pxPerMs
-        Column(Modifier.fillMaxWidth().horizontalScroll(scroll)) {
+        Column(Modifier.fillMaxWidth().horizontalScroll(scroll, flingBehavior = noFling)) {
             // Clips row: strips are laid end to end (width == time) and transition buttons
             // float over the boundaries so they don't shift the time scale.
             Box(Modifier.height(64.dp).width(half * 2 + with(density) { totalPx.toDp() })) {
