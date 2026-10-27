@@ -468,3 +468,23 @@ unreliable.
 - HONEST status: fling-on-release is a sound, matching mechanism; no-fling is the standard remedy.
   NOT YET verified by me on device — needs the play→drag→release→cut test on the Fold5. If still off,
   the long-press diagnostic localises it precisely.
+
+## 2026-10-28 — Session 22 (v0.4.14, thumbnails placed by index not time — the "cut looks wrong" cause)
+- v0.4.13 delivered (signed 073bd78…, no INTERNET, permanent key). Fold5 test: cut with preview on the
+  end of the train still showed two carriage thumbnails at the new clip's start.
+- Traced it: the cut is CORRECT (preview + split both use positionMs; Safe-mode seek is exact), the
+  THUMBNAILS were misplaced. ClipStrip filtered frames to the trimmed range then spread them by INDEX
+  (`inRange[k*N/tiles]`, low end widened by one sample). For a mid-source trim (1:55.90) that pinned a
+  pre-trim frame (~1:53.7) to the left edge and stretched the rest — every tile up to one sample
+  (~2–4 s) too early. Hand-computed against Shane's clip to confirm the magnitude.
+- Fix (VideoTimeline.kt, display-only): each tile shows the sampled frame nearest the SOURCE time at
+  its position in the trimmed range (`trimStart + span*(k+0.5)/tiles` → nearest frame). Removed the
+  index-spread + inRange filter. Cut/preview/export untouched.
+- Fix (VideoEditorViewModel.kt loadThumbs): keep frames.size==count even on decode failure (reuse last
+  good frame; pad leading gap) so the index→time mapping stays exact; sampling raised to ≤60 @ ~1s.
+- Precision note: thumbnails use OPTION_CLOSEST_SYNC (keyframe) so they're nearest-keyframe accurate
+  (~1–2s), not frame-exact; the PREVIEW remains the frame-exact guide (+ ‹ › frame-step).
+- Protected/unchanged: tools, transitions, icon, settings, saved projects, export, no-INTERNET,
+  permanent signing key, "Created by Shane BlackbuRn".
+- HONEST status: placement bug confirmed by code trace; fix is low-risk/display-only. Not yet
+  device-verified by me — Shane to check the thumbnail under the playhead now matches the preview.

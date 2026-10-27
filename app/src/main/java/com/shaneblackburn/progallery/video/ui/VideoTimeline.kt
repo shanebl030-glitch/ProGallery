@@ -237,15 +237,26 @@ private fun ClipStrip(
             .then(if (selected) Modifier.border(3.dp, handleColor, RoundedCornerShape(8.dp)) else Modifier)
             .clickable(onClick = onClick),
     ) {
-        // Frames from the trimmed range only, tiled across the strip.
-        val inRange = if (frames.isEmpty()) emptyList() else frames.filterIndexed { i, _ ->
-            val t = clip.sourceDurationMs * i / frames.size
-            t >= clip.trimStartMs - clip.sourceDurationMs / frames.size && t <= clip.trimEndMs
-        }.ifEmpty { frames.take(1) }
+        // Thumbnails are sampled evenly across the whole source: frames[i] is the frame at source
+        // time sourceDurationMs*i/frames.size. Each tile shows the sampled frame NEAREST the source
+        // time at that tile's position within the trimmed range — i.e. time-accurate placement, so
+        // the thumbnail under the playhead matches the timeline position and the preview.
+        //
+        // The old code filtered to an "in range" sub-list and then spread it by INDEX across the
+        // strip (inRange[k*N/tiles]). That stretched the coarse (~seconds-apart) frames to fill the
+        // width and, near a trim/split boundary, placed a frame from BEFORE the trim point at the
+        // left edge — shifting every tile up to one sample earlier. That mismatch (e.g. carriage
+        // thumbnails still showing after a cut made at the end of the train) is the bug this fixes.
         Row(Modifier.fillMaxHeight()) {
             val tiles = ((widthDp.value / 56f).roundToInt()).coerceAtLeast(1)
+            val n = frames.size
+            val srcDur = clip.sourceDurationMs.coerceAtLeast(1)
+            val span = (clip.trimEndMs - clip.trimStartMs).coerceAtLeast(1)
             repeat(tiles) { k ->
-                val f = inRange.getOrNull((k * inRange.size / tiles).coerceAtMost(inRange.lastIndex.coerceAtLeast(0)))
+                // Source time at the centre of this tile's slice of the trimmed range.
+                val srcMs = clip.trimStartMs + (span * (k + 0.5f) / tiles).toLong()
+                val idx = if (n <= 1) 0 else ((srcMs.toFloat() / srcDur) * n).roundToInt().coerceIn(0, n - 1)
+                val f = frames.getOrNull(idx)
                 if (f != null) Image(f, null, contentScale = ContentScale.Crop, modifier = Modifier.width(widthDp / tiles).fillMaxHeight())
             }
         }

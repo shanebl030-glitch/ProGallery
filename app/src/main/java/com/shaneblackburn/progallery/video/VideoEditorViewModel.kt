@@ -335,15 +335,25 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
             val mmr = MediaMetadataRetriever()
             try {
                 mmr.setDataSource(getApplication(), Uri.parse(clip.uri))
-                val count = (clip.sourceDurationMs / 1500L).toInt().coerceIn(4, 40)
+                // Sample evenly across the whole source: frame[i] is at source time
+                // sourceDurationMs*i/count. The timeline (ClipStrip) relies on that exact mapping to
+                // place each thumbnail at the right time, so we keep frames.size == count even when a
+                // decode fails (reuse the previous good frame, and pad any leading gap) — otherwise
+                // the indices would shift and every thumbnail after the gap would be misplaced.
+                val count = (clip.sourceDurationMs / 1000L).toInt().coerceIn(4, 60)
                 val frames = ArrayList<ImageBitmap>(count)
+                var last: ImageBitmap? = null
                 for (i in 0 until count) {
                     val tUs = clip.sourceDurationMs * 1000L * i / count
                     val bmp: Bitmap? = runCatching {
                         mmr.getScaledFrameAtTime(tUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 160, 160)
                     }.getOrNull()
-                    if (bmp != null) frames += bmp.asImageBitmap()
+                    val f = bmp?.asImageBitmap() ?: last
+                    if (f != null) { frames += f; last = f }
                 }
+                // Leading decodes failed before any success: pad the front with the first good frame
+                // so index i still corresponds to source time sourceDurationMs*i/count.
+                if (frames.isNotEmpty()) { val pad = frames.first(); while (frames.size < count) frames.add(0, pad) }
                 thumbCache[clip.uri] = frames
                 _thumbs.value = HashMap(thumbCache)
             } catch (e: Exception) {

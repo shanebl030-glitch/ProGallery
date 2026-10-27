@@ -2,6 +2,50 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.14] — 2026-10-28 — timeline thumbnails were placed by index, not by time (cut looked wrong)
+
+Fold5 test of v0.4.13: a cut made with the preview showing the end of the train still left two
+carriage thumbnails at the start of the new clip. The cut itself was landing correctly — the
+**thumbnails** were misplaced, which made a correct cut look wrong.
+
+### Root cause (thumbnail placement)
+Thumbnails are sampled evenly across the whole source (frame[i] = source time
+sourceDurationMs·i/count). For a clip, the strip should show, at each position, the frame for that
+position's source time. Instead the old code filtered to the frames whose source time fell in the
+trimmed range and then spread that sub-list across the strip **by index** (`inRange[k·N/tiles]`),
+widened at the low end by one sample. For a split/trimmed clip whose trim point is mid-source (e.g.
+1:55.90), that put a frame from *before* the trim (≈1:53.7) at the left edge and stretched the rest to
+fill — shifting every tile up to one sample (~2–4 s) earlier than its true timeline position. So the
+first tiles kept showing the carriage even though the playhead/preview was at the end of the train.
+
+Because the preview and the split both use the same playhead position (`positionMs`) and Safe-mode
+seeks are exact, the **cut was landing on the frame the preview showed all along** — only the
+thumbnail guide was lying.
+
+### Fix
+- **Time-accurate thumbnail tiling.** Each tile now shows the sampled frame NEAREST the source time at
+  that tile's position in the trimmed range (`trimStart + span·(k+0.5)/tiles` → nearest frame), instead
+  of index-spreading an in-range sub-list. The thumbnail under the playhead now matches the preview
+  (to the nearest sampled keyframe). VideoTimeline.kt only; cut/preview/export logic untouched.
+- **Robust sampling.** The loader keeps `frames.size == count` even when a frame fails to decode
+  (reuse the previous good frame; pad a leading gap), so the index→time mapping the strip relies on
+  stays exact. Sampling density raised (≤60 frames, ~1 s target spacing) for finer placement.
+
+### Precision note
+Thumbnails use fast keyframe decoding (OPTION_CLOSEST_SYNC), so a tile is accurate to the nearest
+keyframe (typically ~1–2 s), not frame-exact. For frame-exact cuts the **preview** is the ground truth
+— scrub so the preview shows the frame, optionally nudge with the ‹ › frame-step buttons, then split.
+
+### Protected / unchanged
+All tools, transitions, icon, settings, saved projects, export, permissions (still **no INTERNET**),
+the permanent signing key, and the "Created by Shane BlackbuRn" credit are untouched.
+
+### Status (honest)
+The index-vs-time placement bug is confirmed by tracing the code against the reported clip (left tile
+showed ≈1:53.7 for a 1:55.90 trim). The fix is display-only and low-risk. **Not yet device-verified by
+me** — needs a look on the Fold5 that the thumbnail under the playhead now matches the preview. The
+long-press sync diagnostic (v0.4.13) confirms the cut lands on the previewed frame.
+
 ## [0.4.13] — 2026-10-28 — timeline overshoot on release (fling) + on-screen sync diagnostic
 
 After v0.4.12 fixed the gross freeze (stuck programmatic-scroll flag), testing on the Fold5 showed the
