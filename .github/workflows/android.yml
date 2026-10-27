@@ -1,9 +1,11 @@
 name: Android build
 
-# Builds and tests ProGallery on every push:
-#  - build:        core + app unit tests, debug/release APKs, lint
-#  - device-tests: instrumented UI and engine tests on an Android emulator (with screenshots)
-#  - publish:      combines everything onto the `ci-results` branch for inspection
+# Builds and tests ProGallery on every push (cheap, emulator-free — ~6 min):
+#  - build:    core + app unit tests, lint, debug/release APKs, and compiles androidTest
+#  - publish:  puts the build output (incl. app-release.apk) on the `ci-results` branch
+# Instrumented/visual tests run on real hardware (adb) or a local emulator, not here (see
+# docs/SESSION_LOG.md). The emulator CI job was removed 2026-10-28 (unreliable + burned the
+# private repo's free Actions minutes).
 
 on:
   push:
@@ -65,10 +67,10 @@ jobs:
         continue-on-error: true
         run: ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee app-test.log; exit ${PIPESTATUS[0]}
 
-      - name: Assemble debug + release APKs
+      - name: Assemble debug + release APKs (and compile androidTest so it can't rot)
         id: assemble
         continue-on-error: true
-        run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace 2>&1 | tee assemble.log; exit ${PIPESTATUS[0]}
+        run: ./gradlew :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee assemble.log; exit ${PIPESTATUS[0]}
 
       - name: Lint
         id: lint
@@ -114,50 +116,14 @@ jobs:
             [ "$s" = "success" ] || exit 1
           done
 
-  device-tests:
-    # Pinned: the emulator is known to boot reliably with KVM on Ubuntu 24.04 runners.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 110
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Free disk space for the emulator
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL || true
-          df -h /
-
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Build app and test APKs
-        run: |
-          mkdir -p device-out
-          set -o pipefail
-          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace 2>&1 | tee device-out/build-apks.log
-
-      - name: Run instrumented tests on emulator (Android 14)
-        timeout-minutes: 100
-        run: bash .github/scripts/run-emulator.sh
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: device-out
-          path: device-out/
-          retention-days: 30
+  # NOTE: the Android emulator job was removed on 2026-10-28. On a software-GL GitHub runner it was
+  # unreliable ("Failed to start Emulator console") and each run burned ~85-110 Actions minutes,
+  # which exhausted this private repo's free monthly minutes. Instrumented/visual tests now run on
+  # real hardware (a device over adb, or a local emulator) instead of here. The androidTest sources
+  # are still COMPILED in the build job so they can't rot. See docs/SESSION_LOG.md.
 
   publish:
-    needs: [build, device-tests]
+    needs: [build]
     if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -166,19 +132,10 @@ jobs:
         with:
           name: build-out
           path: out
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: device-out
-          path: out/device
       - name: Publish to ci-results branch
         run: |
           mkdir -p out
-          DEV=$(cat out/device/exit_code 2>/dev/null || echo missing)
-          [ "$DEV" = "0" ] && DEVRES=success || DEVRES="failure($DEV)"
-          echo "device_tests=$DEVRES" >> out/SUMMARY.txt
-          echo "release_smoke=$(cat out/device/release_smoke_result 2>/dev/null || echo missing)" >> out/SUMMARY.txt
-          cat out/SUMMARY.txt
+          cat out/SUMMARY.txt 2>/dev/null || echo "(no build summary)"
           cd out
           rm -f *-debug*.apk
           git init -q -b ci-results
@@ -187,8 +144,5 @@ jobs:
           git add -A
           git commit -qm "CI results for ${GITHUB_SHA}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ci-results
-      - name: Fail if build or device tests failed
-        run: |
-          grep -q '^device_tests=success' out/SUMMARY.txt
-          grep -q '^release_smoke=pass' out/SUMMARY.txt
-          [ "${{ needs.build.result }}" = "success" ]
+      - name: Fail if build failed
+        run: '[ "${{ needs.build.result }}" = "success" ]'

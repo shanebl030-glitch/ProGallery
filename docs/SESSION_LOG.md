@@ -423,3 +423,18 @@ unreliable.
 - LESSON: my timestamp test (v0.4.8) and CompositionPlayer theories (v0.4.11) missed this because
   the bug is in the Compose coroutine lifecycle, not the player. The Safe-mode diagnostic localised
   it in one step — should have asked for that earlier.
+
+## 2026-10-28 — Session 20 (CI slimmed; Actions minutes exhausted)
+- GitHub Actions has been failing to START any job for ~5 days: fresh runs end in 1-2s with ZERO
+  steps, across build/device-tests/publish. Repo is PRIVATE → free tier = 2000 Actions min/month,
+  exhausted by the many ~85-110 min emulator retries. Not an outage; a quota wall.
+- Per Shane's instruction (keep GitHub for builds/unit/lint, stop the emulator drain): removed the
+  `device-tests` (Android emulator) job from .github/workflows/android.yml entirely. `publish` now
+  needs only `build`. The build job still COMPILES androidTest (added :app:assembleDebugAndroidTest
+  to the assemble step) so the instrumented tests can't rot. CI is now ~6 min/run.
+- Instrumented/visual tests will run on real hardware (adb) or a local emulator, free, not on CI.
+- BLOCKER: even cheap builds can't run until the free Actions minutes reset (monthly, check GitHub
+  billing for the date) OR the repo is made public (unlimited free Actions). v0.4.12 (the real sync
+  fix — stuck programmaticScroll flag) is committed but UNBUILT until then.
+- v0.4.12 sync fix status: committed (5231978), 89 core unit tests pass locally, compiles locally
+  (core). Needs a CI build to produce the signed APK.
