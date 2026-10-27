@@ -319,7 +319,7 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
         }.getOrNull()
     }
 
-    /** Extracts ~1 frame per 1.5 s (max 40) of the whole source for the timeline strip. */
+    /** Extracts ~1 frame per second (max 60) of the whole source for the timeline strip. */
     private fun loadThumbs(clip: Clip): Job = viewModelScope.launch(Dispatchers.IO) {
         if (thumbCache.containsKey(clip.uri)) return@launch
         if (clip.isImage) {
