@@ -80,7 +80,7 @@ object ProjectComposer {
         val (outW, outH) = outputSize(project, settings)
 
         val videoItems = project.clips.mapIndexed { index, clip -> editedItem(project, index, clip, outW, outH, settings) }
-        val sequences = mutableListOf(EditedMediaItemSequence(videoItems, /* isLooping = */ false))
+        val sequences = mutableListOf(EditedMediaItemSequence.Builder(videoItems).build())
 
         project.music?.let { music ->
             val total = project.durationMs
@@ -96,7 +96,7 @@ object ProjectComposer {
                 .setRemoveVideo(true)
                 .setEffects(Effects(listOf<AudioProcessor>(GainEnvelopeProcessor(music.volume, music.fadeInMs, music.fadeOutMs, total)), emptyList()))
                 .build()
-            sequences += EditedMediaItemSequence(listOf(musicItem), music.loop)
+            sequences += EditedMediaItemSequence.Builder(listOf(musicItem)).setIsLooping(music.loop).build()
         }
 
         // Fades and transitions are applied per clip (see ClipTransitionEffect), not here,
@@ -205,7 +205,13 @@ object ProjectComposer {
 
     /** Channel-count-agnostic volume via an identity mixing matrix scaled by [gain]. */
     private fun volumeProcessor(gain: Float): AudioProcessor = ChannelMixingAudioProcessor().apply {
-        for (ch in 1..8) putChannelMixingMatrix(ChannelMixingMatrix.create(ch, ch).scaleBy(gain))
+        // Media3 1.11 removed ChannelMixingMatrix.create(in,out); build the per-channel identity
+        // explicitly (createForConstantGain only supports 1–2 channels, this keeps 1..8 working).
+        for (ch in 1..8) {
+            val coeffs = FloatArray(ch * ch)
+            for (i in 0 until ch) coeffs[i * ch + i] = 1f
+            putChannelMixingMatrix(ChannelMixingMatrix(ch, ch, coeffs).scaleBy(gain))
+        }
     }
 
     /** Frame rate photos are rendered at (matches typical phone video). */

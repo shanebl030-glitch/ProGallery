@@ -10,9 +10,10 @@ import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.OverlaySettings
 import androidx.media3.effect.BitmapOverlay
-import androidx.media3.effect.OverlaySettings
 import androidx.media3.effect.RgbMatrix
+import androidx.media3.effect.StaticOverlaySettings
 import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.TextAnimation
 import com.shaneblackburn.progallery.core.video.VideoFilter
@@ -116,7 +117,7 @@ class TimedTextOverlay(private val project: VideoProject, private val width: Int
     private val buffers = Array(2) { Bitmap.createBitmap(max(2, width), max(2, height), Bitmap.Config.ARGB_8888) }
     private var current = 0
     private var lastKey: String? = null
-    private val settings = OverlaySettings.Builder().build()
+    private val settings: OverlaySettings = StaticOverlaySettings.Builder().build()
 
     override fun getBitmap(presentationTimeUs: Long): Bitmap {
         if (firstUs == Long.MIN_VALUE) firstUs = presentationTimeUs
