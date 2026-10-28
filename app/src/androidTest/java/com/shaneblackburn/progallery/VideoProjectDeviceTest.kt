@@ -205,6 +205,26 @@ class VideoProjectDeviceTest {
     }
 
     /**
+     * Reflection-target guard: PreviewController disables CompositionPlayer video prewarming (to use
+     * a single hardware decoder) via the package-private setVideoPrewarmingEnabled(boolean), because
+     * Media3 exposes no public setter. If a future Media3 upgrade removes or renames it, that
+     * cross-device workaround silently stops applying — this test makes the break visible instead.
+     * (Runs on device/emulator; CI only compiles it.)
+     */
+    @Test fun compositionPlayerPrewarmingSetterIsReflectable() {
+        val m = runCatching {
+            CompositionPlayer.Builder::class.java
+                .getDeclaredMethod("setVideoPrewarmingEnabled", Boolean::class.javaPrimitiveType)
+        }.getOrNull()
+        assertNotNull(
+            m,
+            "CompositionPlayer.Builder.setVideoPrewarmingEnabled(boolean) is gone in this Media3 build — " +
+                "the prewarming workaround in PreviewController no longer applies; revisit it.",
+        )
+        m!!.isAccessible = true // must not throw
+    }
+
+    /**
      * Exports EVERY selectable transition between two visibly-different clips and inspects the
      * boundary frame (peak effect) and an off-cut frame (should be untouched). This is the core
      * of Shane's request: proof each effect actually renders in the exported file, lasts only its

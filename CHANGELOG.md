@@ -2,6 +2,54 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.19-media3] — 2026-10-29 — diagnostic: single-decoder retry for the post-cut preview fallback — DEVICE-TEST BUILD
+
+Addresses Issue 1 (full-effects preview falls back to simplified after the first cut) as a DIAGNOSTIC
+fix — it also tests whether concurrent hardware decoding is the cause. Branch build; not on `main`.
+
+### Root cause (hypothesis, evidence-based — not yet proven)
+The actual error (via the banner's Details) is `ERROR_CODE_DECODING_FAILED` on clip `index=1` (the
+second clip from the cut), format_supported=YES, `c2.mtk.avc.decoder ← CodecException 0x80000000`.
+CompositionPlayer enables video **prewarming** by default (confirmed in the 1.11.1 source: it creates
+a `createSecondaryRenderer` → a SECOND concurrent hardware decoder for the next clip). Many devices
+provide only ONE concurrent decoder instance for a codec (Media3 issue #1825), so a multi-clip
+composition needs two and the second fails. This is a cross-device concurrent-decoder limit, NOT
+MediaTek-specific, and is exposed by the Media3 1.11 migration (prewarming defaults on). It is NOT the
+source format (supported) and NOT our effects (the failure is in the decoder layer).
+
+### Fix (guarded, reactive, one-shot) — preview only
+Media3 exposes no public way to disable prewarming. When the full-effects preview fails with a decode
+error while prewarming is on, PreviewController rebuilds the preview **once** with prewarming disabled
+(single decoder, reused across clips) and keeps it off for the session. Mechanism and safeguards:
+- `setVideoPrewarmingEnabled(false)` is called by **reflection** (package-private; verified to exist in
+  1.11.1). Every reflective step is guarded — if it's missing/renamed/blocked, prewarming stays on and
+  the preview falls back exactly as before (no crash). A `-keep` ProGuard rule preserves the method name
+  under R8 minification. Success/failure is logged.
+- **Exactly one retry** (a session flag prevents loops/repeated rebuilds). Retries only on decode-
+  resource errors (init/query/decoding/resources-reclaimed), not on format-unsupported.
+- Added an instrumented regression test (`compositionPlayerPrewarmingSetterIsReflectable`) that fails
+  if a future Media3 removes the reflected method.
+
+### This is a diagnostic, not a proven cross-device solution
+If the preview works after a cut with prewarming disabled → concurrent decoding confirmed. If it STILL
+fails on a single decoder → concurrency is refuted and the cause is elsewhere (same-source two-clip
+decoder reconfiguration, the boundary seek, the effects pipeline, or a Media3 multi-item bug); the logs
+distinguish these. Export path is UNCHANGED (Transformer decodes sequentially, no prewarming found).
+
+### Maintenance risk
+The reflected setter is `@VisibleForTesting` and tagged for possible removal (b/369817794). Future
+Media3 upgrades must re-verify it (the new test does this on device); if removed, the workaround
+degrades to the existing fallback.
+
+### Scope / preserved
+Preview-only; export/audio/transitions/Safe mode untouched. No INTERNET; permanent key; "Created by
+Shane BlackbuRn". `main`/0.4.15 untouched.
+
+### Status (honest)
+Compiles + unit suite passes in CI. The CI emulator uses SOFTWARE decoders (no concurrent-instance
+limit), so **CI cannot reproduce or validate this fix** — only real hardware can. Export on-device is
+UNTESTED (outstanding). Cross-device compatibility is NOT claimed — validated only where you test it.
+
 ## [0.4.18-media3] — 2026-10-29 — scrubbing control + effect redraw (Issues 2 & 3) — DEVICE-TEST BUILD
 
 Addresses two of three preview issues reported on 0.4.17-media3, using the CompositionPlayer scrubbing

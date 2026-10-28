@@ -16,6 +16,7 @@ import androidx.media3.ui.PlayerView
 import com.shaneblackburn.progallery.CrashReporter
 import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.VideoProject
+import java.lang.reflect.Method
 
 /** Which preview engine is currently showing. */
 enum class PreviewMode { FULL, SIMPLIFIED }
@@ -54,6 +55,30 @@ class PreviewController(
     private var current: VideoProject? = null
     var mode: PreviewMode = PreviewMode.FULL
         private set
+
+    // --- Diagnostic cross-device workaround (preview only) --------------------------------------
+    // CompositionPlayer enables video "prewarming" by default: it opens a SECOND concurrent hardware
+    // video decoder for the next clip. Some devices provide only one decoder instance for a codec, so
+    // a multi-clip composition (e.g. after a cut) fails to decode the second clip
+    // (ERROR_CODE_DECODING_FAILED) and the full-effects preview falls back to simplified. Media3
+    // exposes no public way to disable prewarming, so once a decode failure proves this
+    // device/composition can't run the concurrent decoders, we rebuild ONCE with prewarming disabled
+    // (single decoder, reused across clips) and keep it off for the rest of the session. This both
+    // works around the limit AND tests whether concurrent decoding was really the cause.
+    private var videoPrewarmingDisabled = false
+    // Reflected package-private CompositionPlayer.Builder.setVideoPrewarmingEnabled(boolean) — there
+    // is no public API. Resolved once; null means this Media3 build doesn't expose it (then we never
+    // retry, and behaviour is exactly the existing fallback). See also the -keep ProGuard rule.
+    private val prewarmingSetter: Method? by lazy {
+        runCatching {
+            CompositionPlayer.Builder::class.java
+                .getDeclaredMethod("setVideoPrewarmingEnabled", Boolean::class.javaPrimitiveType)
+                .apply { isAccessible = true }
+        }.getOrNull().also {
+            android.util.Log.i("PreviewController", "CompositionPlayer prewarming setter " +
+                if (it != null) "resolved" else "NOT found in this Media3 build (prewarming cannot be disabled)")
+        }
+    }
 
     val isPlaying: Boolean get() = player?.isPlaying == true
 
@@ -101,7 +126,12 @@ class PreviewController(
             // after a seek (needed so the transition effect clears when scrubbing out of it, and so
             // a scrub lands on the right frame). It costs extra power/resources, but only in the
             // live preview, never the export.
-            val p = CompositionPlayer.Builder(context).experimentalSetEnableReplayableCache(true).build()
+            val builder = CompositionPlayer.Builder(context).experimentalSetEnableReplayableCache(true)
+            // On a device proven unable to run the concurrent decoders prewarming needs, build with
+            // prewarming disabled (single decoder). Safe: if the reflection isn't available this is a
+            // no-op and prewarming stays on.
+            if (videoPrewarmingDisabled) applyPrewarmingDisabled(builder)
+            val p = builder.build()
             var pendingFrameSeek = !wasPlaying
             p.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) = onPlayingChanged(isPlaying)
@@ -115,7 +145,20 @@ class PreviewController(
                     // Don't release the CompositionPlayer from inside its own error callback
                     // (re-entrant release throws IllegalStateException). Defer to the next tick.
                     mainHandler.post {
-                        if (player === p) fallbackToSimplePlayer(project, target, wasPlaying, error)
+                        if (player !== p) return@post
+                        // One-shot diagnostic retry: a decode failure while prewarming is on is
+                        // consistent with the device being unable to run the two concurrent hardware
+                        // decoders prewarming needs. Rebuild ONCE with prewarming disabled (single
+                        // decoder). If that also fails, keep the safe simplified fallback. The guard
+                        // videoPrewarmingDisabled makes this strictly one retry (no loop/repeat).
+                        if (!videoPrewarmingDisabled && prewarmingSetter != null && isDecodeError(error)) {
+                            videoPrewarmingDisabled = true
+                            android.util.Log.w("PreviewController",
+                                "full-effects preview decode error ${error.errorCodeName}; retrying ONCE with video prewarming disabled", error)
+                            show(project, target)
+                        } else {
+                            fallbackToSimplePlayer(project, target, wasPlaying, error)
+                        }
                     }
                 }
             })
@@ -301,5 +344,29 @@ class PreviewController(
     fun release() {
         releasePlayer()
         current = null
+    }
+
+    /** Disable CompositionPlayer video prewarming (single decoder) on [builder] via reflection.
+     * Returns whether it was applied; any failure is logged and leaves prewarming on (safe). */
+    private fun applyPrewarmingDisabled(builder: CompositionPlayer.Builder): Boolean {
+        val m = prewarmingSetter ?: return false
+        return runCatching { m.invoke(builder, false); true }
+            .onSuccess { android.util.Log.i("PreviewController", "video prewarming DISABLED for the preview (single decoder)") }
+            .onFailure { android.util.Log.w("PreviewController", "failed to disable video prewarming via reflection", it) }
+            .getOrDefault(false)
+    }
+
+    private fun isDecodeError(e: PlaybackException): Boolean = e.errorCode in DECODE_RETRY_CODES
+
+    private companion object {
+        // Decode failures worth one retry on a single decoder (init / query / generic decode /
+        // resource exhaustion). Excludes FORMAT_UNSUPPORTED and EXCEEDS_CAPABILITIES, where using
+        // fewer decoders can't help.
+        val DECODE_RETRY_CODES = intArrayOf(
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED,
+        )
     }
 }

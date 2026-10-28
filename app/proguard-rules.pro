@@ -11,3 +11,12 @@
 # Keep line numbers for readable crash reports.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# PreviewController disables CompositionPlayer's video prewarming via reflection on devices that
+# can't run two concurrent hardware decoders (multi-clip full-effects preview fails otherwise).
+# Media3 exposes no public setter, so keep this package-private method's NAME so R8 minification
+# doesn't rename it and break the reflection. If a future Media3 removes it (it is @VisibleForTesting,
+# tracking b/369817794), the reflection fails gracefully and the preview falls back as before.
+-keepclassmembers class androidx.media3.transformer.CompositionPlayer$Builder {
+    *** setVideoPrewarmingEnabled(boolean);
+}

@@ -576,3 +576,26 @@ unreliable.
   Transformer) -> export/audio/transitions untouched. versionName 0.4.18-media3, versionCode 24.
 - HONEST status: compiles + unit tests pass. Issues 2 & 3 are player/GL + UI-timing behaviours NOT
   verifiable by CI; need the Fold5. main/0.4.15 untouched; Safe mode kept.
+
+## 2026-10-29 — Session 27 (v0.4.19-media3, diagnostic single-decoder retry for Issue 1) [BRANCH]
+- Actual error (banner Details, 0.4.18): ERROR_CODE_DECODING_FAILED, index=1 (2nd clip), format
+  supported, c2.mtk.avc.decoder CodecException 0x80000000 -> decode failure on the 2nd clip after a cut.
+- Investigation (cloned 1.11.1 source + Media3 issue tracker): CompositionPlayer prewarming defaults ON
+  and creates a secondary renderer = a 2nd concurrent HW decoder for the next clip; many devices allow
+  only 1 instance per codec (#1825) -> multi-clip fails. Cross-device concurrent-decoder limit, exposed
+  by the Media3 1.11 migration. NO public API to disable prewarming (setter is @VisibleForTesting,
+  package-private, b/369817794). Confirmed export/Transformer does NOT prewarm (sequential) -> likely
+  unaffected but UNTESTED on device.
+- Fix (preview only, guarded, reactive, one-shot): on a full-effects decode error with prewarming on,
+  rebuild ONCE with prewarming disabled via reflection on CompositionPlayer.Builder
+  .setVideoPrewarmingEnabled(false); session flag prevents loops; retry only on decode-resource codes;
+  if reflection unavailable/fails -> existing simplified fallback (safe). Logs success/failure.
+  + ProGuard -keep for the method name (release minifies). + instrumented test
+  compositionPlayerPrewarmingSetterIsReflectable (fails if Media3 removes the method; runs on device).
+- DIAGNOSTIC, not proven: works-after-disable => concurrency confirmed; still-fails => concurrency
+  refuted (other causes: same-source 2-clip reconfig, boundary seek, effects pipeline, Media3 bug).
+- versionName 0.4.19-media3, versionCode 25. Scope preserved: export/audio/transitions/Safe mode
+  untouched, no INTERNET, permanent key, credit. main/0.4.15 untouched.
+- HONEST status: compiles + unit tests pass. CI emulator uses SOFTWARE decoders (no concurrent limit)
+  so CANNOT validate this fix; needs real hardware. Export on-device UNTESTED (outstanding). No
+  cross-device claim.
