@@ -33,6 +33,33 @@ class VideoProjectTest {
         assertEquals(listOf(0L, 3_000L), p.clipStarts().toList())
     }
 
+    @Test fun simpleTimelinePositionAddsEarlierClips() {
+        // Two speed-1 clips: the player reports position WITHIN the current item, so clip 2's
+        // in-item position must have clip 1's timeline duration added back.
+        val p = VideoProject(listOf(clip(1, 10_000), clip(2, 4_000)))
+        assertEquals(5_000, p.simpleTimelinePosition(0, 5_000), "first clip: position is as-is")
+        assertEquals(12_000, p.simpleTimelinePosition(1, 2_000), "second clip: + clip 1 duration")
+        assertEquals(0, p.simpleTimelinePosition(0, 0))
+    }
+
+    @Test fun simpleTimelinePositionDividesBySpeed() {
+        // Clip trimmed to 6 s of source at 2x => 3 s on the timeline. The simple player runs at
+        // source rate, so an in-item (source) position of 6 s is 3 s of timeline time.
+        val fast = clip(1, 10_000).withTrim(0, 6_000).copy(speed = 2f)
+        val p = VideoProject(listOf(fast, clip(2, 4_000)))
+        assertEquals(1_500, p.simpleTimelinePosition(0, 3_000), "half the clip, at 2x")
+        assertEquals(3_000, p.simpleTimelinePosition(0, 6_000), "end of the clip, at 2x")
+        // Clip 2 starts at timeline 3 s (not 6 s), so its in-item position adds 3 s.
+        assertEquals(5_000, p.simpleTimelinePosition(1, 2_000))
+    }
+
+    @Test fun simpleTimelinePositionClampsIndexAndBounds() {
+        val p = VideoProject(listOf(clip(1, 2_000), clip(2, 2_000)))
+        assertEquals(4_000, p.simpleTimelinePosition(9, 9_999), "index and position clamped to the project")
+        assertEquals(0, p.simpleTimelinePosition(-1, -100))
+        assertEquals(0, VideoProject().simpleTimelinePosition(0, 1_000), "empty project")
+    }
+
     @Test fun trimIsClamped() {
         val c = clip(1, 5_000)
         assertEquals(0, c.withTrim(-500, 9_999).trimStartMs)
@@ -270,5 +297,31 @@ class VideoProjectTest {
         val c = clip(1, 1000).copy(sourceRotation = 90)
         assertEquals(1080, c.orientedWidth)
         assertEquals(1920, c.copy(quarterTurns = 1).orientedWidth)
+    }
+
+    @Test fun simpleTimelineMapsAcrossClipsAndSpeed() {
+        // clip1: 4s @1x (timeline 4000); clip2: 10s @2x (timeline 5000). Total 9000.
+        val p = VideoProject(listOf(clip(1, 4_000), clip(2, 10_000).copy(speed = 2f)))
+        assertEquals(9_000, p.durationMs)
+
+        // Timeline -> (clipIndex, in-clip source offset).
+        assertEquals(0 to 2_000L, p.simpleSeek(2_000))          // inside clip 1 (speed 1)
+        assertEquals(1 to 0L, p.simpleSeek(4_000))              // the boundary -> start of clip 2
+        assertEquals(1 to 2_000L, p.simpleSeek(5_000))          // 1000ms into clip2 timeline @2x -> 2000ms source
+
+        // Inverse: player-reported (index, in-clip position) -> whole-timeline position.
+        assertEquals(2_000, p.simpleTimelinePosition(0, 2_000))
+        assertEquals(4_000, p.simpleTimelinePosition(1, 0))     // start of clip 2 is timeline 4000, not 0
+        assertEquals(5_000, p.simpleTimelinePosition(1, 2_000)) // 2000ms source @2x -> +1000ms timeline
+    }
+
+    @Test fun simpleTimelineRoundTrips() {
+        val p = VideoProject(listOf(clip(1, 3_000), clip(2, 8_000).copy(speed = 0.5f), clip(3, 5_000).copy(speed = 2f)))
+        for (t in longArrayOf(0, 1_000, 2_999, 3_000, 10_000, 19_000, p.durationMs - 1)) {
+            val (i, off) = p.simpleSeek(t)
+            val back = p.simpleTimelinePosition(i, off)
+            // Exact apart from <=1ms of integer-rounding on fractional speeds (far sub-frame).
+            assertTrue(kotlin.math.abs(back - t) <= 1, "round-trip at $t got $back")
+        }
     }
 }

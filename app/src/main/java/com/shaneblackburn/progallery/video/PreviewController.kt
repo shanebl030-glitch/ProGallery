@@ -55,7 +55,22 @@ class PreviewController(
         private set
 
     val isPlaying: Boolean get() = player?.isPlaying == true
-    val currentPositionMs: Long get() = player?.currentPosition ?: 0L
+
+    /**
+     * The whole-timeline playback position. In FULL mode the CompositionPlayer plays one composition
+     * whose position already is the timeline position. In SIMPLIFIED mode the ExoPlayer plays a
+     * playlist, so player.currentPosition is only the position WITHIN the current clip and ignores
+     * speed — [VideoProject.simpleTimelinePosition] adds the earlier clips' durations and the speed
+     * factor so the playhead/timecode track the real timeline across clip boundaries during playback.
+     */
+    val currentPositionMs: Long
+        get() {
+            val p = player ?: return 0L
+            val proj = current
+            return if (mode == PreviewMode.SIMPLIFIED && proj != null)
+                proj.simpleTimelinePosition(p.currentMediaItemIndex, p.currentPosition)
+            else p.currentPosition
+        }
 
     @MainThread
     fun attach(playerView: PlayerView?) {
@@ -183,16 +198,15 @@ class PreviewController(
         return b.build()
     }
 
-    /** In the simplified (no-speed) timeline, which clip and offset [timelineMs] lands in. */
-    private fun locateInSimpleTimeline(project: VideoProject, timelineMs: Long): Pair<Int, Long> {
-        var t = timelineMs
-        project.clips.forEachIndexed { i, c ->
-            val raw = if (c.isImage) c.timelineDurationMs else c.trimmedSourceMs
-            if (t < raw || i == project.clips.lastIndex) return i to t.coerceIn(0, maxOf(0, raw - 1))
-            t -= raw
-        }
-        return 0 to 0L
-    }
+    /**
+     * In the simplified (Safe-mode) timeline, which clip and in-item player offset [timelineMs]
+     * lands in. Delegates to the unit-tested [VideoProject.simpleSeek], which accumulates clip
+     * durations in TIMELINE time and scales the in-clip offset by the clip's speed — so scrubbing a
+     * sped/slowed clip, or a later clip, lands on the right source frame (the old local version used
+     * raw source durations and ignored speed).
+     */
+    private fun locateInSimpleTimeline(project: VideoProject, timelineMs: Long): Pair<Int, Long> =
+        project.simpleSeek(timelineMs)
 
     private fun simplifiedNotice(project: VideoProject, cause: Throwable?): String {
         if (cause == null) return "Safe preview mode — colour, speed and effects still apply on export."

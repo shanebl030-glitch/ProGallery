@@ -488,3 +488,24 @@ unreliable.
   permanent signing key, "Created by Shane BlackbuRn".
 - HONEST status: placement bug confirmed by code trace; fix is low-risk/display-only. Not yet
   device-verified by me — Shane to check the thumbnail under the playhead now matches the preview.
+
+## 2026-10-28 — Session 23 (v0.4.15, fix the two Safe-mode bugs from the bug sweep)
+- Ran a full bug sweep (reported to Shane + a Claude Doc). Core found solid; two real bugs, both
+  Safe-mode only, export unaffected.
+- Bug 1: PreviewController.currentPositionMs returned ExoPlayer currentPosition = position within the
+  current clip, so Safe-mode playback of 2+ clips reset the playhead to 0 at each boundary.
+- Bug 2: locateInSimpleTimeline accumulated raw source durations and ignored speed, so Safe-mode
+  scrubbing of a sped clip (or a later clip) landed on the wrong frame.
+- Fix put the mapping in CORE (unit-testable) as an inverse pair on VideoProject: simpleSeek(timelineMs)
+  -> (clipIndex, in-clip offset) [accumulates TIMELINE durations, scales offset by speed]; and
+  simpleTimelinePosition(clipIndex, inClipMs) -> timeline position [adds earlier clips' timeline
+  durations, divides in-clip pos by speed]. PreviewController.locateInSimpleTimeline and
+  currentPositionMs now delegate to these.
+- Tests: +5 core tests (multi-clip, speed, clamp, seek<->position round-trip) -> 94 total, all pass.
+- NOTE: a parallel execution of this same task duplicated some edits (a second simpleTimelinePosition
+  and the doc revs under the same session id). Reconciled by keeping one coherent simpleSeek +
+  simpleTimelinePosition pair and removing the duplicate; tree verified to compile with 94 tests green.
+- Protected/unchanged: tools, transitions, icon, settings, saved projects, export, no-INTERNET,
+  permanent signing key, "Created by Shane BlackbuRn".
+- HONEST status: verified by core unit tests + CI compile; on-device Safe-mode play/scrub still to be
+  confirmed on the Fold5.

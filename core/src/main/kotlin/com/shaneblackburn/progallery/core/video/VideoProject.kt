@@ -117,6 +117,48 @@ data class VideoProject(
 
     data class Location(val clipIndex: Int, val sourceMs: Long, val offsetInClipMs: Long)
 
+    /**
+     * Maps a timeline position to (clipIndex, in-clip player offset ms) for the SIMPLIFIED
+     * (Safe-mode) preview, which plays each clip's trimmed source back-to-back at normal speed
+     * (no speed effect). The player offset is measured from the clip's trim start, so for a clip
+     * played faster/slower than 1× the timeline offset is scaled by [Clip.speed] to land on the
+     * right source frame. For a still image the player offset is the display time (no speed).
+     *
+     * Paired with [simpleTimelinePosition] (its inverse) so the Safe-mode playhead and the
+     * Safe-mode seek agree, across clip boundaries and speed changes.
+     */
+    fun simpleSeek(timelineMs: Long): Pair<Int, Long> {
+        if (clips.isEmpty()) return 0 to 0L
+        var t = max(0L, timelineMs)
+        clips.forEachIndexed { i, c ->
+            val tl = c.timelineDurationMs
+            if (t < tl || i == clips.lastIndex) {
+                val within = t.coerceIn(0, max(0, tl - 1))
+                val off = if (c.isImage) within else (within * c.speed.toDouble()).roundToLong()
+                return i to max(0L, off)
+            }
+            t -= tl
+        }
+        return 0 to 0L
+    }
+
+    /**
+     * Inverse of [simpleSeek]: the whole-timeline position for a Safe-mode player that is on clip
+     * [clipIndex] at [inClipMs] into that clip. ExoPlayer reports position within the current
+     * item, so this adds the earlier clips' timeline durations and converts the in-clip (source)
+     * position back to timeline time via [Clip.speed]. Without this the Safe-mode playhead would
+     * reset to zero at every clip boundary and run at the wrong rate on sped/slowed clips.
+     */
+    fun simpleTimelinePosition(clipIndex: Int, inClipMs: Long): Long {
+        if (clips.isEmpty()) return 0L
+        val idx = clipIndex.coerceIn(0, clips.lastIndex)
+        var base = 0L
+        for (i in 0 until idx) base += clips[i].timelineDurationMs
+        val c = clips[idx]
+        val within = if (c.isImage) max(0L, inClipMs) else (max(0L, inClipMs) / c.speed.toDouble()).roundToLong()
+        return (base + within).coerceIn(0, max(0, durationMs))
+    }
+
     /** The fade/transition windows that touch clip [index], evaluated per-clip. */
     fun clipEdge(index: Int): ClipEdge {
         val clip = clips.getOrNull(index) ?: return ClipEdge(0)

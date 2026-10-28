@@ -2,6 +2,41 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.15] — 2026-10-28 — Safe-mode preview: correct position across clips and speed changes
+
+Fixes the two real bugs found in the v0.4.14 full bug sweep. Both were confined to **Safe preview
+mode** (the fallback/ExoPlayer path) and did not affect export.
+
+### Bug 1 — playback position jumped back at each clip boundary
+`PreviewController.currentPositionMs` returned ExoPlayer's `currentPosition`, which is the position
+WITHIN the current clip, not the whole timeline. In Safe mode, pressing Play on a 2+ clip project
+made the playhead and timecode reset to the clip's start at every boundary and count up again.
+
+### Bug 2 — scrubbing ignored speed changes
+`locateInSimpleTimeline` mapped a timeline position to a clip using raw source durations, without the
+speed factor, so scrubbing a sped/slowed clip (or any clip after one) in Safe mode landed on the wrong
+frame.
+
+### Fix
+The timeline↔simple-player mapping now lives in the **core module** (so it's unit-tested) as an
+inverse pair on `VideoProject`:
+- `simpleSeek(timelineMs)` → `(clipIndex, in-clip player offset)` — accumulates **timeline** durations
+  and scales the in-clip offset by the clip's speed. Used for Safe-mode seeking/scrubbing (Bug 2).
+- `simpleTimelinePosition(clipIndex, inClipMs)` → whole-timeline position — adds earlier clips'
+  timeline durations and divides the in-clip position by speed. Used for the Safe-mode playhead during
+  playback (Bug 1).
+`PreviewController.currentPositionMs` and `locateInSimpleTimeline` now delegate to these. 5 new core
+unit tests cover multi-clip, speed changes, clamping and a seek→position round-trip (94 tests total).
+
+### Protected / unchanged
+All tools, transitions, icon, settings, saved projects, export, permissions (still **no INTERNET**),
+the permanent signing key, and the "Created by Shane BlackbuRn" credit are untouched. Normal
+(non-Safe) preview and export already handled clips and speed correctly and are not affected.
+
+### Status (honest)
+Both fixes are verified by the new core unit tests and compile clean in CI. The on-device behaviour
+(Safe mode, play across clips; scrub a sped clip) still wants a confirming look on the Fold5.
+
 ## [0.4.14] — 2026-10-28 — timeline thumbnails were placed by index, not by time (cut looked wrong)
 
 Fold5 test of v0.4.13: a cut made with the preview showing the end of the train still left two
