@@ -2,6 +2,36 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.16-media3] — 2026-10-29 — Media3 1.5.1 → 1.11.1 (full-effects scrub rendering) — DEVICE-TEST BUILD
+
+Device-test build on the `media3-upgrade` branch (not yet on `main`). Targets the full-effects
+(CompositionPlayer) scrubbing problem: after playing a transition, pausing and scrubbing, the preview
+showed a stale frame while the playhead/thumbnails were correct.
+
+### Why
+Traced to a Media3 GL effects-pipeline seek bug, not our code (our timeline/position logic is correct —
+that's why it only bit full mode and not Safe mode). The matching upstream fix landed in **Media3
+1.11.0**: "Clear redraw state in FinalShaderProgramWrapper when flushing to prevent the player from
+freezing when seeking." We were pinned to 1.5.1 (six minor versions behind).
+
+### Changes
+- **Media3 1.5.1 → 1.11.1** (seek/redraw pipeline fixes, plus other scrubbing fixes in 1.10.1/1.11.x).
+- **compileSdk 35 → 36** (required by Media3 1.11), via `android.suppressUnsupportedCompileSdk` so the
+  existing AGP 8.7.3 / Gradle 8.11.1 are unchanged. `targetSdk` stays 35 → runtime behaviour unchanged.
+- API updates for 1.11.1 (verified against the 1.11.1 source, not guessed): `EditedMediaItemSequence`
+  → its `.Builder`; `ChannelMixingMatrix.create` removed → identity matrix built explicitly;
+  `OverlaySettings` moved to `androidx.media3.common` with `StaticOverlaySettings` as the builder.
+
+### Protected / unchanged
+All editing features, transitions, saved projects, export, permissions (still **no INTERNET**), the
+permanent signing key, and the "Created by Shane BlackbuRn" credit. Safe mode is untouched and stays as
+the fallback — nothing is removed until full mode is confirmed on device.
+
+### Status (honest)
+Compiles and all 94 unit tests pass in CI. **Not device-verified.** Automated tests prove the upgrade
+is sound; they do NOT prove the scrubbing render is fixed — that is GL/player behaviour and only the
+Fold5 can confirm it. If confirmed, this merges to `main` as 0.4.16 and we assess folding Safe mode in.
+
 ## [0.4.15] — 2026-10-28 — Safe-mode preview: correct position across clips and speed changes
 
 Fixes the two real bugs found in the v0.4.14 full bug sweep. Both were confined to **Safe preview

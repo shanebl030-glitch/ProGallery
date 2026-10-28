@@ -509,3 +509,28 @@ unreliable.
   permanent signing key, "Created by Shane BlackbuRn".
 - HONEST status: verified by core unit tests + CI compile; on-device Safe-mode play/scrub still to be
   confirmed on the Fold5.
+
+## 2026-10-29 — Session 24 (v0.4.16-media3, Media3 upgrade for full-effects scrub rendering) [BRANCH]
+- Shane: don't want two half-working modes; make full-effects (CompositionPlayer) reliable enough to be
+  the single editing mode (smooth playback, accurate scrub/seek, correct paused frame, accurate cuts,
+  transitions shown, preview/playhead/thumbnail sync). Fold the useful bits of Safe mode in and remove
+  it ONLY after full mode is device-confirmed.
+- Clarified the failing workflow: play a transition -> pause -> scrub => preview shows a stale frame
+  (playhead/thumbnails correct). Since the transition PLAYS, it is FULL mode (Safe mode has no effects),
+  so v0.4.15 (Safe-mode) did not address it. Earlier Fold5 cut-testing was in Safe mode (banner).
+- Code trace: timeline/position logic is correct (playhead == positionMs == seekTo target). The fault is
+  the full-effects player not painting the seeked frame while paused.
+- Research (authoritative Media3 release notes): matches a GL effects-pipeline seek bug fixed in Media3
+  1.11.0 ("Clear redraw state in FinalShaderProgramWrapper when flushing to prevent the player from
+  freezing when seeking"). We were on 1.5.1. App-level re-seek workarounds re-trigger the same flush, so
+  the real fix is the library upgrade. Shane chose: ship workaround now / upgrade next, but the deeper
+  finding showed the workaround is compromised (no-op or adds lag/flash), so went straight to upgrade.
+- Upgrade (on media3-upgrade branch, main untouched): Media3 1.5.1 -> 1.11.1; compileSdk 35 -> 36 via
+  android.suppressUnsupportedCompileSdk (no AGP/Gradle/targetSdk change). API fixes verified against the
+  cloned 1.11.1 source: EditedMediaItemSequence.Builder; ChannelMixingMatrix identity ctor (create()
+  removed; createForConstantGain only 1-2 ch); OverlaySettings -> androidx.media3.common +
+  StaticOverlaySettings builder. Verified all other Media3 APIs we use are unchanged.
+- CI: branch builds GREEN (core+app tests, assemble, lint; 94 tests). versionName 0.4.16-media3,
+  versionCode 22, signed with permanent key for device testing.
+- HONEST status: upgrade is sound (compiles + tests). NOT device-verified — the scrub render fix is
+  GL/player behaviour only the Fold5 can confirm. Safe mode kept. If confirmed, merge to main as 0.4.16.
