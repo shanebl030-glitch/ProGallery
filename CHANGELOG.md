@@ -2,6 +2,44 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.18-media3] — 2026-10-29 — scrubbing control + effect redraw (Issues 2 & 3) — DEVICE-TEST BUILD
+
+Addresses two of three preview issues reported on 0.4.17-media3, using the CompositionPlayer scrubbing
+APIs added in Media3 1.11. Branch build; not on `main`. Issue 1 (fallback to simplified after the first
+cut) is still under investigation — it needs the actual CompositionPlayer error (see below).
+
+### Issue 2 — scrubbing didn't take over during playback (root cause + fix)
+The scrub handler only engaged when the player was already paused (`active && !playing`), so dragging
+during playback moved the playhead but never paused or seeked the player. Fix: the drag now engages a
+scrub regardless of play state. On drag start, `beginScrub()` **pauses** the player and enters
+CompositionPlayer **scrubbing mode** (optimised for frequent seeks; playback suppressed). Pausing first
+matters: leaving scrubbing mode does an implicit "resume if it was playing", so pausing first guarantees
+the preview **stays put on release** (your requirement). The playback-follow loop also stops the instant
+a scrub starts so it can't fight the drag.
+
+### Issue 3 — transition effect stuck on reverse scrub (root cause + fix)
+Seeking in the GL effects pipeline could leave a stale/stuck effect (the transition stayed on screen
+after scrubbing out of it). Fix: the preview player is now built with `experimentalSetEnableReplayableCache`,
+and every user seek calls `experimentalRedrawLastFrame()` to force the effect pipeline to redraw the
+frame at the new position — so the transition clears when the playhead leaves its window, in either
+direction. (Documented requirement: redraw needs the replayable cache. Costs more power, but preview-only.)
+
+### Issue 1 — still open (not guessing)
+The full-effects preview falls back to simplified after the first cut. Checked and **ruled out** the
+obvious guesses: it is NOT the track-type error (fixed in 0.4.17) and NOT a `setDurationUs` mismatch (the
+Media3 doc confirms we pass the correct full-source duration). It needs the actual CompositionPlayer error,
+which the app captures — tap the yellow banner's "ⓘ Details" after the fall-back to see it.
+
+### Scope / safety
+Preview-only changes (scrubbing mode, replayable cache, redraw are on the preview CompositionPlayer, never
+the export Transformer), so export, audio, transitions and other editing features are untouched. No
+INTERNET; permanent key; "Created by Shane BlackbuRn" preserved. `main`/0.4.15 untouched; Safe mode kept.
+
+### Status (honest)
+Compiles and the unit suite passes in CI. These are **player/GL rendering and UI-timing behaviours that
+CANNOT be verified by automated tests** — scrubbing-pauses-playback, stays-put-on-release, and the effect
+redraw all need the Fold5. Not claiming any issue fixed until you confirm on device.
+
 ## [0.4.17-media3] — 2026-10-29 — fix two Media3-1.11 regressions (export + preview) — DEVICE-TEST BUILD
 
 0.4.16-media3 introduced two regressions on device, both from one root cause. Fixed on the

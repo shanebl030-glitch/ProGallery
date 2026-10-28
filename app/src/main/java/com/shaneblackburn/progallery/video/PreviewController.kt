@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
@@ -34,7 +35,7 @@ enum class PreviewMode { FULL, SIMPLIFIED }
  *
  * All methods must be called on the main thread.
  */
-@OptIn(UnstableApi::class)
+@OptIn(UnstableApi::class, ExperimentalApi::class)
 class PreviewController(
     private val context: Context,
     private val onPlayingChanged: (Boolean) -> Unit = {},
@@ -96,7 +97,11 @@ class PreviewController(
         onMode(PreviewMode.FULL)
         CrashReporter.setPhase("video:preview-full")
         return try {
-            val p = CompositionPlayer.Builder(context).build()
+            // Replayable cache lets experimentalRedrawLastFrame() force an accurate effect redraw
+            // after a seek (needed so the transition effect clears when scrubbing out of it, and so
+            // a scrub lands on the right frame). It costs extra power/resources, but only in the
+            // live preview, never the export.
+            val p = CompositionPlayer.Builder(context).experimentalSetEnableReplayableCache(true).build()
             var pendingFrameSeek = !wasPlaying
             p.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) = onPlayingChanged(isPlaying)
@@ -250,6 +255,38 @@ class PreviewController(
             current?.let { val (i, off) = locateInSimpleTimeline(it, ms); p.seekTo(i, off); return }
         }
         p.seekTo(ms)
+        // Full-effects player: force the effect pipeline to redraw so the frame — and any
+        // transition effect — matches the new position instead of a stale/stuck one (needs the
+        // replayable cache the player is built with). The simplified ExoPlayer repaints seeks itself.
+        redrawEffects()
+    }
+
+    /** A user seek (scrub step, frame-step, explicit). Same as [seekTo] now that seekTo redraws. */
+    @MainThread fun scrubTo(ms: Long) = seekTo(ms)
+
+    /**
+     * Begin a timeline scrub gesture. Pauses first so that leaving scrubbing mode can never trigger
+     * CompositionPlayer's implicit "resume if it was playing" (the preview must stay put on release).
+     * In full mode it then enters the player's scrubbing mode, which is optimised for many frequent
+     * seeks and suppresses playback output while active.
+     */
+    @MainThread fun beginScrub() {
+        val p = player ?: return
+        p.pause()
+        (p as? CompositionPlayer)?.runCatching { setScrubbingModeEnabled(true) }
+    }
+
+    /** End a scrub gesture: land exactly on [ms] (redraws via seekTo) and leave scrubbing mode (the
+     * player stays paused because beginScrub paused it). */
+    @MainThread fun endScrub(ms: Long) {
+        (player as? CompositionPlayer)?.runCatching { setScrubbingModeEnabled(false) }
+        seekTo(ms)
+    }
+
+    /** Force the full-effects pipeline to redraw the current frame (needs the replayable cache the
+     * player is built with). No-op for the simplified ExoPlayer, which repaints seeks itself. */
+    private fun redrawEffects() {
+        (player as? CompositionPlayer)?.let { runCatching { it.experimentalRedrawLastFrame() } }
     }
 
     private fun releasePlayer() {

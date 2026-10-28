@@ -250,7 +250,7 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     // timecode and timeline all track the finger live (positionMs below); the final resting frame
     // is always seeked exactly on release (further below).
     LaunchedEffect(Unit) {
-        pendingSeekMs.filter { it >= 0 }.sample(66).collect { preview.seekTo(it) }
+        pendingSeekMs.filter { it >= 0 }.sample(66).collect { preview.scrubTo(it) }
     }
     // While playing, the player's clock is the single source of truth: follow its position on
     // every animation frame (vsync-aligned, not a fixed 33 ms timer) so the playhead and timecode
@@ -260,7 +260,9 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     // frame slightly apart. This LaunchedEffect re-runs whenever `playing` changes.
     LaunchedEffect(playing) {
         if (playing) {
-            while (playing) {
+            // Stop following the instant a scrub starts, so a drag mid-playback isn't fought by the
+            // follow-scroll (the scrub pauses the player a frame later via beginScrub).
+            while (playing && !scrubbing) {
                 withFrameMillis { } // wait for the next frame, then sample the player
                 positionMs = preview.currentPositionMs.coerceIn(0, maxOf(0, project.durationMs))
                 scrollToMs(positionMs)
@@ -272,21 +274,22 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
         }
     }
     // While the user drags the timeline, the scroll drives: move the playhead with the finger
-    // immediately (zero lag) and throttle the actual preview seek. A programmatic scroll (the
-    // playback follow above, or an explicit seek below) is ignored here so it can't overwrite a
-    // frame-accurate position with a pixel-rounded one.
+    // immediately (zero lag) and throttle the actual preview seek. Dragging takes control even
+    // during playback — beginScrub pauses the player and enters scrubbing mode, so playback stops at
+    // the dragged position and does not resume on release. A programmatic scroll (the playback
+    // follow above, or an explicit seek below) is ignored here so it can't be mistaken for a drag.
     LaunchedEffect(pxPerMs) {
         snapshotFlow { scroll.value to scroll.isScrollInProgress }.collect { (v, active) ->
             when {
-                active && !playing && !programmaticScroll -> {
-                    scrubbing = true
+                active && !programmaticScroll -> {
+                    if (!scrubbing) { scrubbing = true; preview.beginScrub() }
                     positionMs = TimelineMath.msForScrollPx(v, pxPerMs, vm.project.durationMs)
                     pendingSeekMs.value = positionMs
                 }
                 !active && scrubbing -> {
                     scrubbing = false
-                    pendingSeekMs.value = -1L   // cancel any pending debounced seek…
-                    preview.seekTo(positionMs)  // …and land exactly on the resting frame now
+                    pendingSeekMs.value = -1L      // cancel any pending throttled seek…
+                    preview.endScrub(positionMs)   // …land exactly here, leave scrubbing mode, stay paused
                 }
             }
         }

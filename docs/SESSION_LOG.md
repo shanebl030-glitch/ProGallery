@@ -553,3 +553,26 @@ unreliable.
 - versionName 0.4.17-media3, versionCode 23, signed with permanent key for device re-test.
 - HONEST status: root cause confirmed from source; compiles + unit tests pass in CI. Export success and
   transition rendering NOT verified by CI — need the Fold5. main/0.4.15 untouched; Safe mode kept.
+
+## 2026-10-29 — Session 26 (v0.4.18-media3, scrubbing control + effect redraw) [BRANCH]
+- 0.4.17-media3 on device (Shane): transitions play initially (progress), but 3 issues:
+  (1) Simplified-preview banner returns after the first cut (full-effects player falls back);
+  (2) scrubbing during playback moves playhead but video keeps playing; (3) transition effect stays
+  stuck when scrubbing backwards out of a transition.
+- Reviewed Media3 1.11.1 CompositionPlayer scrubbing APIs (from cloned source, per Shane's pointer):
+  setScrubbingModeEnabled(bool) [optimises frequent seeks, suppresses playback, implicit-play on disable
+  if was playing]; experimentalRedrawLastFrame() [forces effect pipeline redraw; REQUIRES
+  experimentalSetEnableReplayableCache(true), costs more power]. Also checked setDurationUs doc: we pass
+  the correct full-source duration, so Issue 1 is NOT a duration mismatch.
+- Issue 2 fix: scrub engages regardless of play state; beginScrub() pauses THEN enters scrubbing mode
+  (pause-first so disable's implicit-play keeps it paused -> stays put on release); follow loop stops on
+  scrubbing (while playing && !scrubbing). PreviewController.beginScrub/endScrub; VideoEditorScreen guard.
+- Issue 3 fix: build preview CompositionPlayer with experimentalSetEnableReplayableCache(true); every
+  user seek (seekTo) now calls experimentalRedrawLastFrame() to repaint the frame/effect at the new
+  position, clearing a stuck transition in either direction. Added @OptIn(ExperimentalApi::class).
+- Issue 1: NOT fixed yet. Ruled out trackTypes (0.4.17) and setDurationUs. Needs the actual
+  CompositionPlayer error (app captures it; banner "ⓘ Details"). Asked Shane to report it.
+- Scope: preview-only (scrubbing mode/replayable cache/redraw on the preview player, not the export
+  Transformer) -> export/audio/transitions untouched. versionName 0.4.18-media3, versionCode 24.
+- HONEST status: compiles + unit tests pass. Issues 2 & 3 are player/GL + UI-timing behaviours NOT
+  verifiable by CI; need the Fold5. main/0.4.15 untouched; Safe mode kept.
