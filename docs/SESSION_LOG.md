@@ -534,3 +534,22 @@ unreliable.
   versionCode 22, signed with permanent key for device testing.
 - HONEST status: upgrade is sound (compiles + tests). NOT device-verified — the scrub render fix is
   GL/player behaviour only the Fold5 can confirm. Safe mode kept. If confirmed, merge to main as 0.4.16.
+
+## 2026-10-29 — Session 25 (v0.4.17-media3, fix two Media3-1.11 regressions) [BRANCH]
+- 0.4.16-media3 on device: (1) Export failed "trackTypes must only contain TRACK_TYPE_AUDIO and/or
+  TRACK_TYPE_VIDEO"; (2) transitions didn't play in preview (screenshot showed the "Simplified preview"
+  banner = full-effects CompositionPlayer errored and fell back).
+- ONE root cause (confirmed in cloned Media3 1.11.1 source): EditedMediaItemSequence list/varargs
+  ctors leave trackTypes={TRACK_TYPE_NONE}; Composition.experimentalSetForceAudioTrack is deprecated and
+  no longer resolves it; Media3 rejects {NONE} (ALLOWED = {AUDIO,VIDEO}). Export (Transformer) and
+  preview (CompositionPlayer) build the SAME composition -> both fail; preview falls back to simplified
+  (no effects) -> no transitions.
+- Fix (ProjectComposer): declare explicit trackTypes per sequence — video/clip sequence {AUDIO,VIDEO}
+  (keeps the continuous audio track, replacing the deprecated force-audio flag), music sequence {AUDIO};
+  removed experimentalSetForceAudioTrack. Added imports C, ImmutableSet.
+- Test: instrumented everySequenceDeclaresValidTrackTypes builds the composition for 5 project shapes
+  from synthetic clips and asserts each sequence's trackTypes ⊆ {AUDIO,VIDEO} and the video sequence has
+  VIDEO. Compiles in CI; RUNS on device (needs Android Uri/media3), so CI only proves compile.
+- versionName 0.4.17-media3, versionCode 23, signed with permanent key for device re-test.
+- HONEST status: root cause confirmed from source; compiles + unit tests pass in CI. Export success and
+  transition rendering NOT verified by CI — need the Fold5. main/0.4.15 untouched; Safe mode kept.

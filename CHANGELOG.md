@@ -2,6 +2,41 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.17-media3] — 2026-10-29 — fix two Media3-1.11 regressions (export + preview) — DEVICE-TEST BUILD
+
+0.4.16-media3 introduced two regressions on device, both from one root cause. Fixed on the
+`media3-upgrade` branch (still not on `main`).
+
+### Root cause (one cause, two symptoms)
+Media3 1.11 changed how an `EditedMediaItemSequence`'s track types are set: the list/varargs
+constructor now leaves a `TRACK_TYPE_NONE` sentinel that must be resolved to AUDIO/VIDEO, and the
+mechanism we used — `Composition.experimentalSetForceAudioTrack` — is now deprecated and no longer
+resolves it. So every sequence stayed `{NONE}`, and Media3 rejected the whole composition with
+"trackTypes must only contain TRACK_TYPE_AUDIO and/or TRACK_TYPE_VIDEO". Because export (Transformer)
+and the live preview (CompositionPlayer) build the *same* composition:
+- **Export failed** with that exact message.
+- **The full-effects preview errored and fell back to the simplified player**, which has no effects —
+  so transitions no longer played in preview (the "Simplified preview" banner was showing).
+
+### Fix
+Declare each sequence's track types explicitly (the documented 1.11 migration): the video/clip
+sequence is `{AUDIO, VIDEO}` (which keeps the continuous audio track for clips/images without audio,
+replacing the deprecated force-audio flag), and the music sequence is `{AUDIO}`. Removed the
+deprecated `experimentalSetForceAudioTrack` call. ProjectComposer only; no change to transitions,
+effects, grade, speed, export settings or audio gain.
+
+### Tests
+Added an instrumented regression test (`everySequenceDeclaresValidTrackTypes`) that builds the
+composition for representative project shapes (single clip, two clips + transition, clip + image,
+muted clip, clips + music) from synthetic clips and asserts every sequence declares only AUDIO/VIDEO.
+It compiles in CI; it RUNS on a device/emulator (the composition build needs Android), so CI proves it
+compiles but not that it passes at runtime.
+
+### Status (honest)
+Root cause confirmed against the Media3 1.11.1 source (the sentinel + deprecated resolver). The fix
+compiles and the unit suite passes in CI. **Export success and transition rendering are NOT verified by
+CI** — both need the Fold5. Please re-test export and whether transitions now play in preview.
+
 ## [0.4.16-media3] — 2026-10-29 — Media3 1.5.1 → 1.11.1 (full-effects scrub rendering) — DEVICE-TEST BUILD
 
 Device-test build on the `media3-upgrade` branch (not yet on `main`). Targets the full-effects

@@ -2,6 +2,7 @@ package com.shaneblackburn.progallery.video
 
 import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -21,6 +22,7 @@ import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
 import com.google.common.collect.ImmutableList
+import com.google.common.collect.ImmutableSet
 import com.shaneblackburn.progallery.core.video.Clip
 import com.shaneblackburn.progallery.core.video.ClipEdge
 import com.shaneblackburn.progallery.core.video.Compat
@@ -80,7 +82,16 @@ object ProjectComposer {
         val (outW, outH) = outputSize(project, settings)
 
         val videoItems = project.clips.mapIndexed { index, clip -> editedItem(project, index, clip, outW, outH, settings) }
-        val sequences = mutableListOf(EditedMediaItemSequence.Builder(videoItems).build())
+        // Media3 1.11 requires each sequence's track types to be declared explicitly: the list
+        // constructor leaves TRACK_TYPE_NONE, and the old Composition.experimentalSetForceAudioTrack
+        // (now deprecated) no longer resolves it, so the composition is rejected with "trackTypes
+        // must only contain TRACK_TYPE_AUDIO and/or TRACK_TYPE_VIDEO" in BOTH export and preview.
+        // Declaring AUDIO+VIDEO here keeps the continuous audio track for clips/images without audio.
+        val sequences = mutableListOf(
+            EditedMediaItemSequence.Builder(ImmutableSet.of(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_VIDEO))
+                .addItems(videoItems)
+                .build(),
+        )
 
         project.music?.let { music ->
             val total = project.durationMs
@@ -96,7 +107,10 @@ object ProjectComposer {
                 .setRemoveVideo(true)
                 .setEffects(Effects(listOf<AudioProcessor>(GainEnvelopeProcessor(music.volume, music.fadeInMs, music.fadeOutMs, total)), emptyList()))
                 .build()
-            sequences += EditedMediaItemSequence.Builder(listOf(musicItem)).setIsLooping(music.loop).build()
+            sequences += EditedMediaItemSequence.Builder(ImmutableSet.of(C.TRACK_TYPE_AUDIO))
+                .addItems(listOf(musicItem))
+                .setIsLooping(music.loop)
+                .build()
         }
 
         // Fades and transitions are applied per clip (see ClipTransitionEffect), not here,
@@ -108,8 +122,8 @@ object ProjectComposer {
 
         return Composition.Builder(sequences)
             .setEffects(Effects(emptyList(), compositionVideoEffects))
-            // Clips without audio (or muted) still produce a continuous audio track.
-            .experimentalSetForceAudioTrack(true)
+            // (Continuous audio track is now ensured by the video sequence's AUDIO track type above,
+            // replacing the deprecated experimentalSetForceAudioTrack.)
             // Tone-map HDR (and 10-bit) input down to SDR. Phones (e.g. Samsung) record
             // HDR10+/HEVC-10bit by default; the GL editing pipeline and our SDR grade shader
             // can't consume BT.2020/10-bit, which otherwise fails with ERROR_CODE_DECODING_FAILED

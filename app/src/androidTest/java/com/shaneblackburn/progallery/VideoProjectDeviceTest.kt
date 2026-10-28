@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
+import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -20,6 +21,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.video.Clip
+import com.shaneblackburn.progallery.core.video.MusicTrack
 import com.shaneblackburn.progallery.core.video.Transition
 import com.shaneblackburn.progallery.core.video.TransitionType
 import com.shaneblackburn.progallery.core.video.VideoColor
@@ -160,6 +162,46 @@ class VideoProjectDeviceTest {
             s += 0.2126 * Color.red(p) + 0.7152 * Color.green(p) + 0.0722 * Color.blue(p); n++
         }
         return s / n
+    }
+
+    /**
+     * Regression (Media3 1.11 upgrade): every sequence ProjectComposer builds must declare AUDIO/
+     * VIDEO track types. The list constructor leaves TRACK_TYPE_NONE and the old
+     * Composition.experimentalSetForceAudioTrack no longer resolves it, so Media3 rejects the
+     * composition with "trackTypes must only contain TRACK_TYPE_AUDIO and/or TRACK_TYPE_VIDEO" —
+     * which broke BOTH export and the full-effects preview (it fell back to simplified, dropping
+     * transitions). Builds the composition for representative shapes from synthetic clips (no media
+     * is opened), catching the failure at the API/validation level. Runs on device; CI only compiles.
+     */
+    @Test fun everySequenceDeclaresValidTrackTypes() {
+        fun vclip(id: Long) = Clip(id, "content://media/v$id", "v$id.mp4", 5_000, 1920, 1080)
+        fun image(id: Long) = Clip(id, "content://media/i$id", "i$id.jpg", 3_000, 1920, 1080,
+            hasAudio = false, isImage = true, mimeType = "image/jpeg")
+        val shapes = listOf(
+            "single video" to VideoProject(listOf(vclip(1))),
+            "two clips + transition" to VideoProject(
+                listOf(vclip(1), vclip(2)), transitions = listOf(Transition(TransitionType.BLUR, 600)),
+            ),
+            "clip + image" to VideoProject(listOf(vclip(1), image(2))),
+            "muted clip" to VideoProject(listOf(vclip(1).copy(muted = true))),
+            "clips + music" to VideoProject(
+                listOf(vclip(1), vclip(2)), music = MusicTrack("content://media/song", "song", 30_000),
+            ),
+        )
+        val allowed = setOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_VIDEO)
+        for ((name, project) in shapes) {
+            val composition = ProjectComposer.build(project) // must not throw
+            composition.sequences.forEachIndexed { i, seq ->
+                assertTrue(
+                    seq.trackTypes.isNotEmpty() && allowed.containsAll(seq.trackTypes),
+                    "$name: sequence $i has invalid trackTypes ${seq.trackTypes}",
+                )
+            }
+            assertTrue(
+                composition.sequences[0].trackTypes.contains(C.TRACK_TYPE_VIDEO),
+                "$name: the video sequence must carry VIDEO",
+            )
+        }
     }
 
     /**
