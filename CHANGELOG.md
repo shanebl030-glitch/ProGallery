@@ -2,6 +2,49 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.20-media3] — 2026-10-29 — surface the prewarming-retry outcome on the phone (diagnostic) — DEVICE-TEST BUILD
+
+0.4.19's single-decoder retry did NOT stop the fallback: Shane's phone still falls back to the
+simplified preview with the identical error (`ERROR_CODE_DECODING_FAILED`, clip `index=1`,
+`c2.mtk.avc.decoder ← CodecException 0x80000000`) on opening a multi-clip project. That outcome is
+ambiguous and can't be resolved from the error text alone, so this build makes the phone report which
+happened — no logcat needed. Branch build; not on `main`. No behaviour change beyond the added text.
+
+### Why the 0.4.19 result was ambiguous (forensic findings)
+- **The reflection survived R8.** Decompiling the shipped 0.4.19 APK (androguard) shows
+  `setVideoPrewarmingEnabled(boolean)` is still present (the `-keep` rule worked); R8 renamed the class
+  to `Y2.C` but `CompositionPlayer.Builder::class.java` resolves to that renamed class at runtime, so
+  `getDeclaredMethod(...)` should still find it. So "R8 stripped the method" is ruled out statically.
+- **Disabling prewarming really does drop the second decoder.** In the Media3 1.11.1 source,
+  `SequenceRenderersFactory.createSecondaryRenderer(...)` returns `null` when `videoPrewarmingEnabled`
+  is false, so a single decoder is reused across clips.
+- **But an `index=1` decode error at position 0 is the signature of prewarming** decoding the *next*
+  clip ahead of time — i.e. it looks like prewarming was still **on** during the failing attempt. That
+  contradicts the two points above, and the only way to tell which is true is a runtime signal.
+
+### What this build adds
+- The fallback **Details** text now ends with `[clips=N, prewarm=…]`, where `prewarm` is one of:
+  - `NO-API` — reflection unavailable (no retry possible)
+  - `ON(default)` — the failing attempt was the first one, prewarming on (retry never ran)
+  - `OFF(retry)` — the retry ran and prewarming was genuinely disabled (single decoder) — and it
+    **still** failed → concurrent decoding is **refuted**, the cause is elsewhere
+  - `ON(disable-failed)` — the retry ran but the reflection invoke failed, so prewarming stayed on
+- No new hypothesis or fix — this is the diagnostic capture agreed for the case where the retry fails.
+  The one-shot retry, ProGuard keep, safe fallback, preview-only scope, signing key, credit and absent
+  INTERNET permission are all unchanged.
+
+### How to read it on the phone
+Open a cut/multi-clip project, let the simplified banner appear, tap **ⓘ Details**, and send the
+`prewarm=…` value. `OFF(retry)` means I stop chasing prewarming and investigate the second-clip decode
+path (same-source clip reconfiguration, the clip-boundary seek, the effects pipeline, or a Media3
+multi-item bug). `ON(default)`/`NO-API`/`ON(disable-failed)` mean the retry didn't take effect and I
+fix the reflection path instead.
+
+### Still outstanding / unverified
+- Export on the device for a multi-clip project — NOT yet confirmed by Shane; kept outstanding.
+- Issues 2 & 3 (scrubbing should pause playback; stuck transition effect) — not re-confirmed on 0.4.19/0.4.20.
+- Cross-device compatibility — NOT validated (single device).
+
 ## [0.4.19-media3] — 2026-10-29 — diagnostic: single-decoder retry for the post-cut preview fallback — DEVICE-TEST BUILD
 
 Addresses Issue 1 (full-effects preview falls back to simplified after the first cut) as a DIAGNOSTIC

@@ -599,3 +599,24 @@ unreliable.
 - HONEST status: compiles + unit tests pass. CI emulator uses SOFTWARE decoders (no concurrent limit)
   so CANNOT validate this fix; needs real hardware. Export on-device UNTESTED (outstanding). No
   cross-device claim.
+
+## 2026-10-29 — Session 28 (v0.4.20-media3, diagnostic visibility)
+- Result of the 0.4.19 diagnostic: Shane's phone STILL falls back to the simplified preview on opening
+  a multi-clip project, with the identical error (ERROR_CODE_DECODING_FAILED, clip index=1,
+  c2.mtk.avc.decoder CodecException 0x80000000). So the single-decoder retry did NOT stop it.
+- Forensics to disambiguate (did the retry actually disable prewarming?):
+  * androguard on the shipped 0.4.19 APK: setVideoPrewarmingEnabled(boolean) SURVIVED R8 (the -keep
+    worked); class renamed to Y2.C, but CompositionPlayer.Builder::class.java resolves to it at runtime,
+    so getDeclaredMethod should still find it. "R8 stripped it" ruled out statically.
+  * Media3 1.11.1 source: SequenceRenderersFactory.createSecondaryRenderer returns null when
+    videoPrewarmingEnabled=false => disabling prewarming genuinely removes the 2nd decoder.
+  * BUT index=1 decode error at position 0 is the signature of prewarming decoding the NEXT clip early
+    => looks like prewarming was STILL ON during the failing attempt. Contradiction only a runtime
+    signal can resolve; logcat not accessible to Shane.
+- Change (diagnostic only, no behaviour change): buildReason() now appends "[clips=N, prewarm=X]" to the
+  fallback Details text. X in {NO-API, ON(default), OFF(retry), ON(disable-failed)} tells us exactly what
+  the failing attempt did. OFF(retry)+still-fails => concurrency REFUTED (investigate second-clip decode
+  path). ON(default)/NO-API/ON(disable-failed) => reflection path didn't take effect; fix that.
+- versionName 0.4.20-media3, versionCode 26. Scope preserved: no INTERNET, permanent key, credit, main
+  untouched. Unit tests pass; CI build-only (sw decoders can't reproduce the hw limit). Export on-device
+  still OUTSTANDING; no cross-device claim.

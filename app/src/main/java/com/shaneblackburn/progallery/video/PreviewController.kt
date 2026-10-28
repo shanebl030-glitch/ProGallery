@@ -66,6 +66,16 @@ class PreviewController(
     // (single decoder, reused across clips) and keep it off for the rest of the session. This both
     // works around the limit AND tests whether concurrent decoding was really the cause.
     private var videoPrewarmingDisabled = false
+    // Diagnostic surfaced in the fallback "Details" text so the prewarming-retry outcome is visible
+    // on the phone WITHOUT logcat. Reflects the attempt that actually fell back:
+    //   NO-API             reflection unavailable in this Media3 build (no retry possible)
+    //   ON(default)        first attempt, prewarming on (default) — a retry should follow if it was a decode error
+    //   OFF(retry)         retry attempt, prewarming successfully disabled (single decoder)
+    //   ON(disable-failed) retry attempt, but the reflection invoke failed so prewarming stayed on
+    // If the banner still shows after a cut with "OFF(retry)", a single decoder also failed, which
+    // REFUTES the concurrent-decoder hypothesis (cause lies elsewhere). "ON(default)" means the retry
+    // never fired; "NO-API"/"ON(disable-failed)" mean the reflection didn't take effect.
+    private var prewarmDiag = "prewarm=untested"
     // Reflected package-private CompositionPlayer.Builder.setVideoPrewarmingEnabled(boolean) — there
     // is no public API. Resolved once; null means this Media3 build doesn't expose it (then we never
     // retry, and behaviour is exactly the existing fallback). See also the -keep ProGuard rule.
@@ -130,7 +140,13 @@ class PreviewController(
             // On a device proven unable to run the concurrent decoders prewarming needs, build with
             // prewarming disabled (single decoder). Safe: if the reflection isn't available this is a
             // no-op and prewarming stays on.
-            if (videoPrewarmingDisabled) applyPrewarmingDisabled(builder)
+            val prewarmingDisabledNow = if (videoPrewarmingDisabled) applyPrewarmingDisabled(builder) else false
+            prewarmDiag = "prewarm=" + when {
+                prewarmingSetter == null -> "NO-API"
+                !videoPrewarmingDisabled -> "ON(default)"
+                prewarmingDisabledNow -> "OFF(retry)"
+                else -> "ON(disable-failed)"
+            }
             val p = builder.build()
             var pendingFrameSeek = !wasPlaying
             p.addListener(object : Player.Listener {
@@ -277,6 +293,7 @@ class PreviewController(
             c = c.cause; depth++
         }
         firstVideoInfo(project)?.let { sb.append(" [").append(it.summary()).append("]") }
+        sb.append(" [clips=").append(project.clips.size).append(", ").append(prewarmDiag).append("]")
         return sb.toString().ifBlank { cause.javaClass.simpleName }
     }
 
