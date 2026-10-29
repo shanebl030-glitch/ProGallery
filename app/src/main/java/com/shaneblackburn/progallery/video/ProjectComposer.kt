@@ -184,16 +184,47 @@ object ProjectComposer {
             .build()
     }
 
+    /** The trimmed [MediaItem] for a video [clip]. Shared by export and the composed-frame preview so
+     * both decode the exact same source range (and Media3's FrameExtractor can reuse its decoder while
+     * the clip is unchanged, since equal MediaItems avoid a re-prepare). */
+    fun clipMediaItem(clip: Clip): MediaItem = MediaItem.Builder()
+        .setUri(Uri.parse(clip.uri))
+        .setClippingConfiguration(
+            MediaItem.ClippingConfiguration.Builder()
+                .setStartPositionMs(clip.trimStartMs)
+                .setEndPositionMs(clip.trimEndMs)
+                .build(),
+        )
+        .build()
+
+    /**
+     * The per-clip VIDEO effect chain for the on-demand composed preview (Media3 FrameExtractor),
+     * built from the SAME helpers as export so the previewed frame is produced by the same shaders.
+     * Differs from export only in ways that don't change a still frame's pixels: the speed effect is
+     * omitted (speed changes playback rate, not the frame at a given position — the caller seeks to the
+     * exact source frame), and the transition is evaluated at [transitionTimeMs] (the known playhead
+     * output-time) instead of inferring time from the single extracted frame. [outW]x[outH] is the
+     * preview render size (typically a downscaled copy of the export size, same aspect/letterboxing).
+     */
+    fun previewVideoEffects(
+        project: VideoProject,
+        index: Int,
+        outW: Int,
+        outH: Int,
+        transitionTimeMs: () -> Long,
+    ): List<Effect> {
+        val clip = project.clips[index]
+        val edge = project.clipEdge(index)
+        return buildList {
+            geometryEffect(clip)?.let(::add)
+            addAll(colorEffects(clip))
+            add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
+            if (ClipTransitionEffect.needed(edge)) add(ClipTransitionEffect(edge, fixedTimeMs = transitionTimeMs))
+        }
+    }
+
     private fun videoItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge): EditedMediaItem {
-        val mediaItem = MediaItem.Builder()
-            .setUri(Uri.parse(clip.uri))
-            .setClippingConfiguration(
-                MediaItem.ClippingConfiguration.Builder()
-                    .setStartPositionMs(clip.trimStartMs)
-                    .setEndPositionMs(clip.trimEndMs)
-                    .build(),
-            )
-            .build()
+        val mediaItem = clipMediaItem(clip)
 
         val video = buildList<Effect> {
             if (clip.speed != 1f) add(SpeedChangeEffect(clip.speed))

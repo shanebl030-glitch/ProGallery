@@ -26,11 +26,23 @@ import com.shaneblackburn.progallery.core.video.TransitionUniforms
  *
  * Placed last in a clip's video-effect list so the frame timestamps it sees are the clip's
  * 0-based output time (after speed/trim), matching [ClipEdge].
+ *
+ * [fixedTimeMs] handles single-frame extraction (the on-demand composed preview via Media3
+ * FrameExtractor). There, only ONE frame is rendered per request, so the usual
+ * "time since the first frame seen" logic would always read as t=0 and freeze the transition at its
+ * start. When [fixedTimeMs] is supplied it returns the clip's output time to evaluate the transition
+ * at — the caller already knows the exact playhead position it is extracting. It is read per frame
+ * (it may be a live provider), so one effect instance can serve successive scrub positions without
+ * being rebuilt. When null (continuous playback and export) the original frame-relative timing is used
+ * unchanged, so those paths are byte-for-byte identical to before.
  */
 @OptIn(UnstableApi::class)
-class ClipTransitionEffect(private val edge: ClipEdge) : GlEffect {
+class ClipTransitionEffect(
+    private val edge: ClipEdge,
+    private val fixedTimeMs: (() -> Long)? = null,
+) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        ClipTransitionShaderProgram(edge, useHdr)
+        ClipTransitionShaderProgram(edge, useHdr, fixedTimeMs)
 
     companion object {
         fun needed(edge: ClipEdge) = edge.isActive
@@ -38,8 +50,11 @@ class ClipTransitionEffect(private val edge: ClipEdge) : GlEffect {
 }
 
 @OptIn(UnstableApi::class)
-private class ClipTransitionShaderProgram(private val edge: ClipEdge, useHdr: Boolean) :
-    BaseGlShaderProgram(useHdr, 1) {
+private class ClipTransitionShaderProgram(
+    private val edge: ClipEdge,
+    useHdr: Boolean,
+    private val fixedTimeMs: (() -> Long)? = null,
+) : BaseGlShaderProgram(useHdr, 1) {
 
     private val program: GlProgram = try {
         GlProgram(VERTEX, FRAGMENT).apply {
@@ -53,8 +68,12 @@ private class ClipTransitionShaderProgram(private val edge: ClipEdge, useHdr: Bo
     override fun configure(inputWidth: Int, inputHeight: Int): Size = Size(inputWidth, inputHeight)
 
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
-        if (firstUs == Long.MIN_VALUE) firstUs = presentationTimeUs
-        val tMs = (presentationTimeUs - firstUs) / 1000
+        val tMs = fixedTimeMs?.invoke() ?: run {
+            // Continuous playback / export: time since the first frame this program saw, which is the
+            // clip's 0-based output time.
+            if (firstUs == Long.MIN_VALUE) firstUs = presentationTimeUs
+            (presentationTimeUs - firstUs) / 1000
+        }
         val u: TransitionUniforms = edge.uniformsAt(tMs)
         // A seed that changes a few times a second, so the glitch flickers.
         val seed = ((presentationTimeUs / 60_000L) % 997L).toFloat()

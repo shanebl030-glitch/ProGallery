@@ -225,6 +225,30 @@ class VideoProjectDeviceTest {
     }
 
     /**
+     * Phase 1 composed-frame preview: the on-demand [FramePreviewRenderer] must render a frame for
+     * the SECOND clip of a same-source cut WITH a transition — the exact case that defeats the
+     * hardware-only CompositionPlayer path on some devices. FrameExtractor decodes in software, so
+     * this should succeed where the live full-effects preview falls back. (Runs on device/emulator;
+     * CI only compiles it. On software-GL emulators it also exercises the effect pipeline.)
+     */
+    @Test fun composedPreviewRendersTransitionFrame() = runBlocking {
+        val base = VideoProject(listOf(videoClip()))
+        val mid = (base.durationMs / 2).coerceAtLeast(300)
+        val p = base.splitAt(mid)
+            .setTransition(0, Transition(TransitionType.FADE_BLACK, minOf(800L, mid)))
+        assertEquals(2, p.clips.size, "clip should split into two")
+        val renderer = com.shaneblackburn.progallery.video.FramePreviewRenderer(ctx)
+        try {
+            // Just inside the incoming transition on clip 1 (the second same-source segment).
+            val bmp = kotlinx.coroutines.withTimeout(90_000) { renderer.render(p, mid + 40, 480) }
+            assertNotNull(bmp, "composed frame should render via FrameExtractor software decode")
+            assertTrue(bmp!!.width >= 2 && bmp.height >= 2, "frame has real size ${bmp.width}x${bmp.height}")
+        } finally {
+            renderer.release()
+        }
+    }
+
+    /**
      * Exports EVERY selectable transition between two visibly-different clips and inspects the
      * boundary frame (peak effect) and an off-cut frame (should be untouched). This is the core
      * of Shane's request: proof each effect actually renders in the exported file, lasts only its

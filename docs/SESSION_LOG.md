@@ -646,3 +646,24 @@ unreliable.
   cuts with NO transition? Options to weigh: keep split (export = source of truth); custom LoadControl
   experiment (supported, speculative); on-demand composed-frame preview via the real pipeline (reliable,
   medium effort); custom GL compositor preview w/ software decode (the "one reliable mode", large).
+
+## 2026-10-30 — Session 29 (v0.4.21-media3) — Phase 1: on-demand composed preview
+- Approved Option C (staged). Phase 1: accurate transition preview via Media3 1.11.1 FrameExtractor
+  (androidx.media3:media3-inspector-frame), which defaults to PREFER_SOFTWARE decode => no hardware
+  per-codec instance limit => decodes the 2nd same-source clip that CompositionPlayer (hardware-only,
+  enableDecoderFallback=false, no injection hook) rejects. Verified all APIs against the 1.11.1 source
+  before coding (FrameExtractor.getFrame/effects/Frame; internal re-prepares ONLY on MediaItem change,
+  so scrubbing within a clip just re-seeks; ClipEdge/simpleSeek time bases).
+- Changes: new FramePreviewRenderer (per-clip extractor reuse, ~720p downscale, dedicated thread,
+  newest-wins); ProjectComposer.previewVideoEffects + clipMediaItem (shared with export so preview uses
+  the same shaders, minus the speed effect which doesn't change a still frame); ClipTransitionEffect
+  optional fixed-time provider (fixes the single-frame t=0 freeze; playback/export path unchanged when
+  null); VideoProject.framePreviewSpec (pure, unit-tested); VideoEditorScreen shows the composed Bitmap
+  over the raw player while paused/scrubbing in simplified mode (video clips), banner goes neutral.
+- Tests: +3 core unit (framePreviewSpec mapping incl. speed; transition progress) -> 97 pass; +1
+  instrumented composedPreviewRendersTransitionFrame (device-run; CI compiles). CI is build-only.
+- Limits (honest): video clips only; accurate on pause/scrub, NOT real-time transition playback
+  (deferred to Phase 3); inspector-frame is @UnstableApi; preview DESIGNED to match export, exact
+  frame-for-frame match NOT yet verified on device.
+- Scope preserved: export untouched, no INTERNET, permanent key, credit, versionCode 27 /
+  0.4.21-media3, main/0.4.15 untouched. Report API deviations before delivering the signed APK.

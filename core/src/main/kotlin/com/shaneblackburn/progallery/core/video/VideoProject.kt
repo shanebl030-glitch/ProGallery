@@ -159,6 +159,24 @@ data class VideoProject(
         return (base + within).coerceIn(0, max(0, durationMs))
     }
 
+    /**
+     * Everything the on-demand composed-frame preview needs to render the exact frame at whole-timeline
+     * position [timelineMs]: which [clipIndex] it falls in, the [sourceOffsetMs] to seek the decoder to
+     * within that clip (0-based from the clip's trim start, in SOURCE time — what Media3 FrameExtractor
+     * takes), and [inClipTimelineMs], the clip's 0-based OUTPUT time used to evaluate the transition
+     * ([ClipEdge.uniformsAt]) — the same output-time the export pipeline's transition sees. The two
+     * differ only by the clip's speed; they are equal at 1×. Pure and unit-tested so preview placement
+     * and transition progress are verified without a device.
+     */
+    fun framePreviewSpec(timelineMs: Long): FramePreviewSpec {
+        val (idx, off) = simpleSeek(timelineMs)
+        if (clips.isEmpty()) return FramePreviewSpec(0, 0L, 0L)
+        var base = 0L
+        for (i in 0 until idx) base += clips[i].timelineDurationMs
+        val within = (max(0L, timelineMs) - base).coerceIn(0L, max(0L, clips[idx].timelineDurationMs - 1))
+        return FramePreviewSpec(idx, off, within)
+    }
+
     /** The fade/transition windows that touch clip [index], evaluated per-clip. */
     fun clipEdge(index: Int): ClipEdge {
         val clip = clips.getOrNull(index) ?: return ClipEdge(0)
@@ -408,6 +426,15 @@ object FadeCurve {
  * half-duration and the incoming clip's first half-duration. The project's own fade-in/out
  * fill the first/last clip's start/end.
  */
+/** Placement of a composed preview frame: see [VideoProject.framePreviewSpec]. */
+data class FramePreviewSpec(
+    val clipIndex: Int,
+    /** Decoder seek position within the clip, 0-based from trim start, in source time. */
+    val sourceOffsetMs: Long,
+    /** Clip-local output (timeline) time, for evaluating the transition at this frame. */
+    val inClipTimelineMs: Long,
+)
+
 data class ClipEdge(
     val durationMs: Long,
     val inType: TransitionType = TransitionType.NONE,

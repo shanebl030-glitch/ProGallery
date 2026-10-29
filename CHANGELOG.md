@@ -2,6 +2,54 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.21-media3] — 2026-10-30 — Phase 1: accurate on-demand composed preview (transitions) — DEVICE-TEST BUILD
+
+Fixes the transition PREVIEW properly (not by hiding the banner): on devices where the live
+full-effects CompositionPlayer can't run a same-source multi-clip composition (confirmed root cause:
+Media3's CompositionPlayer hardcodes hardware-only decoding with no fallback and no injection point),
+the editor now renders the EXACT composed frame — colour, geometry and the transition — at the
+playhead while paused or scrubbing, using Media3 1.11.1 `FrameExtractor` with a SOFTWARE decoder.
+Playback and export are unchanged. Branch build; not on `main`.
+
+### What changed
+- New dependency `androidx.media3:media3-inspector-frame:1.11.1` (`FrameExtractor`). Its default
+  `MediaCodecSelector.PREFER_SOFTWARE` decoder has no per-codec hardware-instance limit and decodes
+  the second same-source clip that the hardware pipeline rejects.
+- New `FramePreviewRenderer`: given the project + a timeline position, builds the clip's `MediaItem`
+  and the SAME per-clip effect list as export (via new `ProjectComposer.previewVideoEffects`), and
+  returns the composed `Bitmap`. Reuses one extractor per clip (equal `MediaItem` ⇒ Media3 reuses the
+  decoder; scrubbing only re-seeks), downscales to ~720p preview size, runs off the UI thread on a
+  dedicated extractor thread, and is driven newest-wins so a fast scrub can't back up or show a stale
+  frame.
+- `ClipTransitionEffect` gains an optional fixed-time provider: single-frame extraction would otherwise
+  read the transition as t=0 (frozen at its start). The provider feeds the known playhead output-time
+  so the transition shows correct progress; one effect instance serves successive scrub positions.
+  **Playback and export paths are byte-for-byte unchanged** (the provider is null there).
+- New pure core mapping `VideoProject.framePreviewSpec(timelineMs)` → (clipIndex, source-offset for the
+  decoder, in-clip output-time for the transition), unit-tested.
+- Editor: shows the composed frame over the raw player while paused/scrubbing in the simplified-preview
+  state (video clips); the banner turns from an amber warning into a neutral note while it's shown.
+  Hidden during playback (continuous playback still uses the existing engines).
+
+### Scope preserved
+- Export pipeline untouched; all transitions/colour/geometry/editing intact; no new permissions
+  (INTERNET still absent); permanent signing key, package name and `Created by Shane BlackbuRn` credit
+  preserved; `main`/0.4.15 untouched.
+
+### Known limitations (Phase 1)
+- Video clips only: image clips keep the existing preview (FrameExtractor needs a video track).
+- Accurate while PAUSED/SCRUBBING, not during continuous real-time playback of the transition
+  (software per-frame decode isn't full-rate) — that smooth-playback option is deferred to Phase 3.
+- `media3-inspector-frame` is `@UnstableApi` (we already opt into unstable Media3); version pinned.
+- Preview is built from the same effects/shaders as export and designed to match it, but exact
+  frame-for-frame equivalence is NOT claimed until verified on-device (see tests below).
+
+### Tests
+- Core unit (CI-run): `framePreviewSpec` clip/offset/in-clip-time mapping incl. speed, and transition
+  progress at the previewed frame (97 core tests pass).
+- Instrumented (device-run; CI compiles): `composedPreviewRendersTransitionFrame` renders a frame for
+  the second same-source clip with a transition via FrameExtractor and asserts a real bitmap.
+
 ## [0.4.20-media3] — 2026-10-29 — surface the prewarming-retry outcome on the phone (diagnostic) — DEVICE-TEST BUILD
 
 0.4.19's single-decoder retry did NOT stop the fallback: Shane's phone still falls back to the

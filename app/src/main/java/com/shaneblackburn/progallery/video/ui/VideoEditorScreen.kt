@@ -12,6 +12,7 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,6 +64,9 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -83,12 +87,14 @@ import com.shaneblackburn.progallery.core.video.TimelineMath
 import com.shaneblackburn.progallery.ui.theme.ProGalleryTheme
 import com.shaneblackburn.progallery.ui.theme.ThemeMode
 import com.shaneblackburn.progallery.video.ExportState
+import com.shaneblackburn.progallery.video.FramePreviewRenderer
 import com.shaneblackburn.progallery.video.PreviewController
 import com.shaneblackburn.progallery.video.VideoEditorViewModel
 import com.shaneblackburn.progallery.video.VideoExportSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -212,6 +218,17 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
         )
     }
     DisposableEffect(Unit) { onDispose { preview.release() } }
+    // On-demand composed preview: when the full-effects live player can't run the composition and falls
+    // back to the simplified (raw) player, render the EXACT export frame — colour, geometry and the
+    // transition — at the playhead via Media3 FrameExtractor (software decode) and show it while paused
+    // or scrubbing. This is what makes a transition visible on devices whose hardware decoder can't run
+    // a multi-clip composition. Playback and export are unchanged; the frame uses the same per-clip
+    // effects as export.
+    val frameRenderer = remember { FramePreviewRenderer(context) }
+    DisposableEffect(Unit) { onDispose { frameRenderer.release() } }
+    var composedFrame by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Bumped to request a fresh composed frame (position moved, project edited, or mode/pause changed).
+    val composedTick = remember { MutableStateFlow(0L) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) preview.pause() }
@@ -298,6 +315,31 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     LaunchedEffect(showSyncDebug) {
         while (showSyncDebug) { playerPosMs = preview.currentPositionMs; delay(120) }
     }
+    // ---- Composed-frame preview driver (see frameRenderer above) --------------------------------
+    // Request a new composed frame whenever the playhead moves or the overlay state changes…
+    LaunchedEffect(Unit) {
+        snapshotFlow { positionMs to (simplifiedPreview && !playing && !loading) }
+            .collect { composedTick.value = composedTick.value + 1 }
+    }
+    // …and when the project is edited (transition added, duration/strength/colour changed).
+    LaunchedEffect(Unit) {
+        vm.history.map { it.current }.distinctUntilChanged().debounce(120)
+            .collect { composedTick.value = composedTick.value + 1 }
+    }
+    // Render newest-wins: while one frame is decoding, intermediate requests collapse to the latest, so
+    // a fast scrub never backs up and an older frame can't overwrite a newer one. Reads the current
+    // state at render time so it always targets the latest position.
+    LaunchedEffect(Unit) {
+        composedTick.conflate().collect {
+            composedFrame = if (simplifiedPreview && !playing && !loading) {
+                frameRenderer.render(vm.project, positionMs, /* maxShortSidePx = */ 720)?.asImageBitmap()
+            } else {
+                null
+            }
+        }
+    }
+    // Clear the composed frame immediately when playback starts (don't wait for a render tick).
+    LaunchedEffect(playing) { if (playing) composedFrame = null }
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val pickMusic = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::setMusic) }
@@ -349,16 +391,30 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                     onRelease = { preview.attach(null) },
                     modifier = Modifier.fillMaxSize(),
                 )
+                // Accurate composed frame (effects + transition) over the raw player while paused/scrubbing.
+                composedFrame?.let { bmp ->
+                    Image(
+                        bitmap = bmp,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                    )
+                }
                 previewError?.let {
                     if (simplifiedPreview) {
-                        // Working raw preview: a slim, non-blocking banner at the top. Tapping it
-                        // shows why the full-effects preview couldn't run (for diagnostics).
+                        // While the composed frame is shown (paused/scrub), effects ARE visible, so the
+                        // banner turns from an amber warning into a neutral note; during raw playback it
+                        // stays amber. Tapping it still shows why the live full-effects preview fell back.
+                        val composedShown = composedFrame != null
+                        val bannerText = if (composedShown)
+                            "Preview (paused) shows the composed frame — playback is raw; effects apply on export."
+                        else it
                         Text(
-                            it + (if (fallbackReason != null) "  ⓘ Details" else ""),
+                            bannerText + (if (fallbackReason != null) "  ⓘ Details" else ""),
                             color = Color.White, textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                                .background(Color(0xCC5B4300))
+                                .background(if (composedShown) Color(0xCC1B5E20) else Color(0xCC5B4300))
                                 .clickable(enabled = fallbackReason != null) { showFallbackDetails = true }
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                         )

@@ -324,4 +324,50 @@ class VideoProjectTest {
             assertTrue(kotlin.math.abs(back - t) <= 1, "round-trip at $t got $back")
         }
     }
+
+    // --- Composed-frame preview (on-demand FrameExtractor path) ----------------------------------
+
+    @Test fun framePreviewSpecMapsClipSourceOffsetAndInClipTime() {
+        // 3 x 4s clips, speed 1. Transition after clip 0 (1s) splits 500ms onto each adjacent edge.
+        val p = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000), clip(3, 4_000)))
+            .setTransition(0, Transition(TransitionType.FADE_BLACK, 1_000))
+
+        // Boundary -> start of clip 1: clipIndex 1, both offsets 0.
+        p.framePreviewSpec(4_000).let {
+            assertEquals(1, it.clipIndex); assertEquals(0L, it.sourceOffsetMs); assertEquals(0L, it.inClipTimelineMs)
+        }
+        // 250ms into clip 1 (speed 1 -> source offset == timeline offset).
+        p.framePreviewSpec(4_250).let {
+            assertEquals(1, it.clipIndex); assertEquals(250L, it.sourceOffsetMs); assertEquals(250L, it.inClipTimelineMs)
+        }
+        // Near the end of clip 0.
+        p.framePreviewSpec(3_999).let {
+            assertEquals(0, it.clipIndex); assertEquals(3_999L, it.sourceOffsetMs); assertEquals(3_999L, it.inClipTimelineMs)
+        }
+    }
+
+    @Test fun framePreviewSpecScalesSourceOffsetBySpeed() {
+        // A 2x clip: timeline 5s (10s source / 2). The decoder seek is in SOURCE time, the transition
+        // time is in OUTPUT (timeline) time, so they differ by the speed factor.
+        val p = VideoProject(listOf(clip(1, 10_000).copy(speed = 2f)))
+        p.framePreviewSpec(2_000).let {
+            assertEquals(0, it.clipIndex)
+            assertEquals(4_000L, it.sourceOffsetMs)    // 2000ms timeline @2x -> 4000ms source
+            assertEquals(2_000L, it.inClipTimelineMs)  // transition evaluated in timeline time
+        }
+    }
+
+    @Test fun transitionProgressAtPreviewFrameMatchesOutputTime() {
+        val p = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000)))
+            .setTransition(0, Transition(TransitionType.FADE_BLACK, 1_000))
+        // Incoming half on clip 1 (inMs = 500): deepest at the cut (t=0), gone by t>=500.
+        val e1 = p.clipEdge(1)
+        val fadeAtCut = e1.uniformsAt(p.framePreviewSpec(4_000).inClipTimelineMs).fade
+        val fadeMid = e1.uniformsAt(p.framePreviewSpec(4_250).inClipTimelineMs).fade
+        val fadeEnd = e1.uniformsAt(p.framePreviewSpec(4_500).inClipTimelineMs).fade
+        assertTrue(fadeAtCut > fadeMid, "fade should ease out after the cut ($fadeAtCut !> $fadeMid)")
+        assertTrue(fadeMid > fadeEnd, "fade should keep easing ($fadeMid !> $fadeEnd)")
+        assertEquals(0f, fadeEnd, "transition is over 500ms into the incoming clip")
+        assertTrue(fadeAtCut > 0f, "transition is visible at the cut")
+    }
 }

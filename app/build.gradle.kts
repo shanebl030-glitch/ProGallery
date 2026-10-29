@@ -22,8 +22,8 @@ android {
         applicationId = "com.shaneblackburn.progallery"
         minSdk = 29
         targetSdk = 35
-        versionCode = 26
-        versionName = "0.4.20-media3"
+        versionCode = 27
+        versionName = "0.4.21-media3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -108,6 +108,10 @@ dependencies {
     implementation(libs.media3.common)
     implementation(libs.media3.transformer)
     implementation(libs.media3.effect)
+    // On-demand composed-frame preview (FrameExtractor): renders the exact export frame with effects
+    // via a software decoder, for an accurate transition preview on devices where CompositionPlayer's
+    // hardware-only pipeline can't run the composition (preview only; export is unaffected).
+    implementation(libs.media3.inspector.frame)
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.exifinterface)
