@@ -94,7 +94,6 @@ import com.shaneblackburn.progallery.video.VideoExportSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -326,11 +325,12 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
         vm.history.map { it.current }.distinctUntilChanged().debounce(120)
             .collect { composedTick.value = composedTick.value + 1 }
     }
-    // Render newest-wins: while one frame is decoding, intermediate requests collapse to the latest, so
-    // a fast scrub never backs up and an older frame can't overwrite a newer one. Reads the current
-    // state at render time so it always targets the latest position.
+    // Render newest-wins: a StateFlow already hands a slow collector only the latest value, so while one
+    // frame is decoding, intermediate tick bumps collapse — a fast scrub never backs up and an older
+    // frame can't overwrite a newer one. Reads the current state at render time so it targets the latest
+    // position.
     LaunchedEffect(Unit) {
-        composedTick.conflate().collect {
+        composedTick.collect {
             composedFrame = if (simplifiedPreview && !playing && !loading) {
                 frameRenderer.render(vm.project, positionMs, /* maxShortSidePx = */ 720)?.asImageBitmap()
             } else {
