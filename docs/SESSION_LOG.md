@@ -620,3 +620,29 @@ unreliable.
 - versionName 0.4.20-media3, versionCode 26. Scope preserved: no INTERNET, permanent key, credit, main
   untouched. Unit tests pass; CI build-only (sw decoders can't reproduce the hw limit). Export on-device
   still OUTSTANDING; no cross-device claim.
+
+## 2026-10-30 — Session 28 (cont.) — root cause established; CompositionPlayer limit
+- Shane's Details now reads [clips=3, prewarm=OFF(retry)] with the SAME index=1 c2.mtk.avc.decoder
+  0x80000000 error. DEFINITIVE: the retry fired, prewarming was genuinely disabled (single decoder),
+  and clip index=1 STILL failed => concurrency-via-prewarming is REFUTED.
+- Source dig (Media3 1.11.1): CompositionPlayer's internal SequenceVideoRenderer is built with
+  MediaCodecSelector.DEFAULT (hardware-first) AND setEnableDecoderFallback(false). So a hardware decode
+  failure does NOT fall back to software; it fails hard. CompositionPlayer.Builder exposes NO hook to
+  change the codec selector, the renderers factory, or decoder fallback (setMediaSourceFactory,
+  setVideoGraphFactory, setLoadControl, setPerStreamMediaProgressionEnabled exist; none touch decoder
+  selection). setPerStreamMediaProgressionEnabled = cross-sequence progression, not decoder concurrency.
+- CONCLUSION: the full-effects preview's index=1 hardware-decode failure on same-source multi-clip
+  (what cutting one video produces) is NOT fixable via supported CompositionPlayer APIs in 1.11.1. The
+  only levers (software decode / decoder fallback) are sealed in the internal renderer factory. Likely
+  mechanism: decoder reconfiguration/handoff for the 2nd same-source clip (mid-GOP start) or transient
+  item-handoff decoder overlap that MediaTek rejects; effects/BufferingVideoSink hold frames longer,
+  which is why adding a transition makes it surface. NOT a GL-effect bug (ClipTransitionEffect is a pure
+  per-clip fragment shader on one decoded texture; it never needs the other clip's frames).
+- Transitions are pure per-clip shaders (no cross-clip blend), so transitions alone don't force
+  concurrency; the trigger is same-source multi-clip, which cutting always produces.
+- NO code change this session-part (investigation only). No new APK: no supported fix to build, and
+  Shane wants root cause + direction before the next build. Need two device facts next: (1) does EXPORT
+  of this 3-clip project render correctly? (2) does the yellow banner also show for plain multi-clip
+  cuts with NO transition? Options to weigh: keep split (export = source of truth); custom LoadControl
+  experiment (supported, speculative); on-demand composed-frame preview via the real pipeline (reliable,
+  medium effort); custom GL compositor preview w/ software decode (the "one reliable mode", large).
