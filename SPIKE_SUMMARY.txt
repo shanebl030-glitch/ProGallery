@@ -1,0 +1,4 @@
+commit=f72c481819863bff7d8605de56635e06bc7fa556
+run=40980089199
+emulator_api=30 google_apis x86_64 (software decoders)
+test_outcome=failure
