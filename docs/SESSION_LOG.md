@@ -857,3 +857,12 @@ unreliable.
   (1) Ripple+Blur both confined to their own cuts, plain footage between, backward & forward & jumps;
   (2) scrub smoothness now that transition clips render composed CPU frames on the Fold5 (Snapdragon should
   be fine; 540px cap for blur). Transition-free clips unchanged (still GPU).
+
+## 2026-10-31 — Session 35 (CI release APK filename)
+- Restored the historical release filename ProGallery-<version>.apk (e.g. ProGallery-0.4.25.apk).
+- CI-only change in .github/workflows/android.yml "Collect results": read versionName from
+  build.gradle.kts at build time (not hardcoded), drop the "-media3" suffix, rename out/app-release.apk
+  to ProGallery-$VERNUM.apk BEFORE the checksum/signing steps so SHA256SUMS/SIGNING use the new name.
+  Debug APKs keep their names and are still dropped in the publish job.
+- No app code, versionCode/versionName, package, identity, functionality or signing config changed.
+  main/v0.4.15 untouched. versionName stays 0.4.25-media3 -> filename ProGallery-0.4.25.apk.

@@ -85,6 +85,16 @@ jobs:
           find . -path '*/build/test-results/*' -name '*.xml' -exec cp {} out/ \; 2>/dev/null || true
           cp app/build/reports/lint-results-debug.txt out/ 2>/dev/null || true
           find app/build/outputs/apk -name '*.apk' -exec cp {} out/ \; 2>/dev/null || true
+          # Release APK keeps the historical ProGallery-<version>.apk name. The version is read from
+          # build.gradle.kts at build time (never hardcoded) and the "-media3" branch suffix is dropped,
+          # so e.g. versionName 0.4.25-media3 -> ProGallery-0.4.25.apk. Debug APKs keep their names and
+          # are dropped in the publish job. Done before the checksum/signing steps so they use the new name.
+          VER=$(grep -E 'versionName\s*=\s*"' app/build.gradle.kts | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          VERNUM=${VER%%-*}
+          if [ -n "$VERNUM" ] && [ -f out/app-release.apk ]; then
+            mv out/app-release.apk "out/ProGallery-$VERNUM.apk"
+            echo "Release APK: ProGallery-$VERNUM.apk"
+          fi
           (cd out && sha256sum *.apk > SHA256SUMS.txt 2>/dev/null || true)
           # Record the signing certificate of each APK (to verify update compatibility).
           APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
