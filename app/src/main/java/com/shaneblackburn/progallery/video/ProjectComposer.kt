@@ -135,11 +135,16 @@ object ProjectComposer {
 
     private fun editedItem(project: VideoProject, index: Int, clip: Clip, outW: Int, outH: Int, settings: VideoExportSettings): EditedMediaItem {
         val edge = project.clipEdge(index)
-        return if (clip.isImage) imageItem(clip, outW, outH, edge) else videoItem(clip, outW, outH, edge)
+        // Diagnostic-only: this clip's start on the output timeline (sum of earlier clips' output durations).
+        val clipStartMs = project.clips.take(index).sumOf { it.timelineDurationMs }
+        return if (clip.isImage) imageItem(clip, outW, outH, edge, clipStartMs, index)
+        else videoItem(clip, outW, outH, edge, clipStartMs, index)
     }
 
-    /** The per-clip transition/fade effect, appended last so it sees the clip's 0-based output time. */
-    private fun transitionEffect(edge: ClipEdge): Effect? = if (ClipTransitionEffect.needed(edge)) ClipTransitionEffect(edge) else null
+    /** The per-clip transition/fade effect, appended last so it sees the clip's 0-based output time.
+     *  [clipStartMs]/[clipIndex] are diagnostic-only (populate [TransitionDiag]); they don't change rendering. */
+    private fun transitionEffect(edge: ClipEdge, clipStartMs: Long = 0L, clipIndex: Int = -1): Effect? =
+        if (ClipTransitionEffect.needed(edge)) ClipTransitionEffect(edge, clipStartMs = clipStartMs, clipIndex = clipIndex) else null
 
     /** Colour effects shared by photo and video clips (grade, then filter look). */
     private fun colorEffects(clip: Clip): List<Effect> = buildList {
@@ -164,7 +169,7 @@ object ProjectComposer {
     }
 
     /** A still photo shown for the clip's duration. Media3 does not apply EXIF, so we rotate it here. */
-    private fun imageItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge): EditedMediaItem {
+    private fun imageItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge, clipStartMs: Long = 0L, clipIndex: Int = -1): EditedMediaItem {
         val durationMs = clip.timelineDurationMs
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.parse(clip.uri))
@@ -175,7 +180,7 @@ object ProjectComposer {
             geometryEffect(clip, extraCwDegrees = clip.sourceRotation)?.let(::add)
             addAll(colorEffects(clip))
             add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
-            transitionEffect(edge)?.let(::add)
+            transitionEffect(edge, clipStartMs, clipIndex)?.let(::add)
         }
         return EditedMediaItem.Builder(mediaItem)
             .setDurationUs(durationMs * 1000)
@@ -219,7 +224,7 @@ object ProjectComposer {
         }
     }
 
-    private fun videoItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge): EditedMediaItem {
+    private fun videoItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge, clipStartMs: Long = 0L, clipIndex: Int = -1): EditedMediaItem {
         val mediaItem = clipMediaItem(clip)
 
         val video = buildList<Effect> {
@@ -228,7 +233,7 @@ object ProjectComposer {
             addAll(colorEffects(clip))
             // Every clip is fitted to the same output frame (letterboxed if needed).
             add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
-            transitionEffect(edge)?.let(::add)
+            transitionEffect(edge, clipStartMs, clipIndex)?.let(::add)
         }
 
         val audio = buildList<AudioProcessor> {

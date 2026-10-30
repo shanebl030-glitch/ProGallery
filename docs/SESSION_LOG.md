@@ -866,3 +866,25 @@ unreliable.
   Debug APKs keep their names and are still dropped in the publish job.
 - No app code, versionCode/versionName, package, identity, functionality or signing config changed.
   main/v0.4.15 untouched. versionName stays 0.4.25-media3 -> filename ProGallery-0.4.25.apk.
+
+## 2026-10-31 — Session 36 (v0.4.25.1-media3-diag) — timestamp-mapping diagnostic build
+- Shane found a LIVE PLAYBACK bug on the Fold5: seek into the middle of a clip then Play, and the clip's
+  incoming transition (Ripple) plays across the whole clip until the next cut. Root cause (confirmed by
+  reasoning): ClipTransitionEffect derives clip time from firstUs = first frame the shader instance saw,
+  which after a seek is an arbitrary position, so the incoming edge reads active across the clip. Blur at
+  the next cut looks right because the NEXT clip's shader anchors firstUs=0 when playback enters it fresh.
+- Approved Option 1: confirm the Media3 timestamp mapping BEFORE changing timing. This build is
+  DIAGNOSTIC-ONLY — rendering/playback/export behaviour is unchanged (shader still uses firstUs).
+  * New TransitionDiag (volatile holder) written each drawFrame: clipIndex, pts(ms), firstUs(ms),
+    clipStart(ms, = sum of earlier clips' timelineDurationMs, passed from ProjectComposer.editedItem),
+    clipDur(ms), t(firstUs)=pts-firstUs (current), t(calc)=pts-clipStart (proposed).
+  * ProjectComposer threads clipStartMs + index into transitionEffect/ClipTransitionEffect (diagnostic
+    args only; do NOT affect the effect list's behaviour).
+  * VideoEditorScreen Sync-check overlay (long-press timecode) now also shows the TX line, re-read each
+    120ms sample tick. Compare: pts vs pos (is pts global output time?), t(calc) vs pos-start (does
+    pts-clipStart recover the true clip-relative time?), and watch t(firstUs) go wrong after a seek.
+- To read it on the Fold5: open the editor, long-press the timecode to show SYNC, then run the 4 scenarios
+  (play from start; seek to mid-clip; play after seeking; cross into next clip). Report the TX numbers.
+- versionCode 32 / 0.4.25.1-media3-diag (installs over 0.4.25; same permanent key). CI filename
+  ProGallery-0.4.25.1.apk. main/v0.4.15 untouched; export behaviour unchanged. Real GPU timing fix is
+  gated on this diagnostic's confirmation.

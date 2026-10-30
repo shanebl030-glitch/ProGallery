@@ -15,6 +15,22 @@ import com.shaneblackburn.progallery.core.video.ClipEdge
 import com.shaneblackburn.progallery.core.video.TransitionUniforms
 
 /**
+ * DIAGNOSTIC-ONLY readout (v0.4.25.1-diag). Records what the GPU transition shader actually sees for
+ * the clip it last rendered, so the live overlay (Sync check) can confirm the Media3 timestamp mapping
+ * before the real timing fix is implemented. Writing these volatile fields does NOT affect rendering,
+ * playback or export — the shader still uses the existing `firstUs` logic for the actual transition.
+ */
+object TransitionDiag {
+    @Volatile var clipIndex: Int = -1
+    @Volatile var ptsMs: Long = 0L          // presentationTimeUs the shader received, in ms (ground truth)
+    @Volatile var firstUsMs: Long = 0L      // the first-frame anchor currently used, in ms
+    @Volatile var clipStartMs: Long = 0L    // calculated clip start (sum of earlier clips' output durations)
+    @Volatile var clipDurMs: Long = 0L      // this clip's output (timeline) duration
+    @Volatile var tFirstUsMs: Long = 0L     // clip time the CURRENT code computes (pts - firstUs)
+    @Volatile var tCalcMs: Long = 0L        // clip time the PROPOSED fix would compute (pts - clipStartMs)
+}
+
+/**
  * Per-clip transition effect: fades, blur, zoom, cross-zoom, whip pan, push/slide, wipe, iris,
  * light leak and glitch, applied in the clip's own time window(s).
  *
@@ -40,9 +56,13 @@ import com.shaneblackburn.progallery.core.video.TransitionUniforms
 class ClipTransitionEffect(
     private val edge: ClipEdge,
     private val fixedTimeMs: (() -> Long)? = null,
+    // Diagnostic-only: the clip's index and its calculated start on the output timeline. Used solely to
+    // populate [TransitionDiag]; they do NOT change how the transition is rendered (that still uses firstUs).
+    private val clipStartMs: Long = 0L,
+    private val clipIndex: Int = -1,
 ) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        ClipTransitionShaderProgram(edge, useHdr, fixedTimeMs)
+        ClipTransitionShaderProgram(edge, useHdr, fixedTimeMs, clipStartMs, clipIndex)
 
     companion object {
         fun needed(edge: ClipEdge) = edge.isActive
@@ -54,6 +74,8 @@ private class ClipTransitionShaderProgram(
     private val edge: ClipEdge,
     useHdr: Boolean,
     private val fixedTimeMs: (() -> Long)? = null,
+    private val clipStartMs: Long = 0L,
+    private val clipIndex: Int = -1,
 ) : BaseGlShaderProgram(useHdr, 1) {
 
     private val program: GlProgram = try {
@@ -75,6 +97,17 @@ private class ClipTransitionShaderProgram(
             (presentationTimeUs - firstUs) / 1000
         }
         val u: TransitionUniforms = edge.uniformsAt(tMs)
+        // DIAGNOSTIC (read-only): record what this clip's shader actually saw so the Sync-check overlay
+        // can confirm the timestamp mapping. Does not influence the uniforms/rendering above or below.
+        if (clipIndex >= 0) {
+            TransitionDiag.clipIndex = clipIndex
+            TransitionDiag.ptsMs = presentationTimeUs / 1000
+            TransitionDiag.firstUsMs = if (firstUs == Long.MIN_VALUE) 0L else firstUs / 1000
+            TransitionDiag.clipStartMs = clipStartMs
+            TransitionDiag.clipDurMs = edge.durationMs
+            TransitionDiag.tFirstUsMs = tMs
+            TransitionDiag.tCalcMs = presentationTimeUs / 1000 - clipStartMs
+        }
         // A seed that changes a few times a second, so the glitch flickers.
         val seed = ((presentationTimeUs / 60_000L) % 997L).toFloat()
         try {
