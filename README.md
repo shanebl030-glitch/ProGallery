@@ -11,4 +11,4 @@ If you are interested in contributing, making suggestions, or helping with devel
 
 I appreciate any interest in the project and am happy to consider contributions on a case-by-case basis.
 
-Created by Shane BlackbuRn
+Created by Shane BlackbuRn and Claude.AI
