@@ -9,7 +9,11 @@ name: Spike emulator
 # This is NOT proof of hardware/vendor behaviour on physical devices — the emulator only exercises
 # software decode. It does not touch the production build, export, main, or release APKs.
 
+# Dispatchable only from the default branch, so on this feature branch it runs when a pushed commit
+# message contains the marker "[spike]" (keeps it off every ordinary push to the branch).
 on:
+  push:
+    branches: [ media3-upgrade ]
   workflow_dispatch:
 
 permissions:
@@ -21,6 +25,7 @@ concurrency:
 
 jobs:
   spike:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[spike]')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
