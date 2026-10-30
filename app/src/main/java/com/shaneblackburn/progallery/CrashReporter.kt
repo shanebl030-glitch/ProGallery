@@ -3,6 +3,7 @@ package com.shaneblackburn.progallery
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import com.shaneblackburn.progallery.core.video.SafePreviewPolicy
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,6 +29,8 @@ object CrashReporter {
     private const val K_SUMMARY = "last_crash_summary"
     private const val K_CRASH_IN_VIDEO = "crash_in_video"
     private const val K_SAFE_PREVIEW = "safe_preview"
+    private const val K_SAFE_AUTO = "safe_preview_auto"
+    private const val K_SAFE_CRASH_COUNT = "safe_preview_crash_count"
     private const val K_PHASE = "last_phase"
     private const val MAX_FILES = 6
 
@@ -131,5 +134,53 @@ object CrashReporter {
 
     /** When on, the video editor preview skips the GPU effects pipeline (CompositionPlayer). */
     fun isSafePreview(): Boolean = prefs()?.getBoolean(K_SAFE_PREVIEW, false) ?: false
+
+    /** Whether Safe mode was enabled automatically (after a crash) rather than chosen by the user. Only
+     * auto-enabled Safe mode is subject to the guarded recovery trial; a manual choice is never auto-cleared. */
+    fun isSafePreviewAuto(): Boolean = prefs()?.getBoolean(K_SAFE_AUTO, false) ?: false
+
+    /** Consecutive editor crashes with no confirmed full-effects success since; drives the trial back-off. */
+    fun safePreviewCrashCount(): Int = prefs()?.getInt(K_SAFE_CRASH_COUNT, 0) ?: 0
+
+    /** Auto-enable Safe mode after an editor crash, counting the crash for the trial back-off. */
+    fun enableSafePreviewAfterCrash() {
+        runCatching {
+            prefs()?.edit()
+                ?.putBoolean(K_SAFE_PREVIEW, true)
+                ?.putBoolean(K_SAFE_AUTO, true)
+                ?.putInt(K_SAFE_CRASH_COUNT, safePreviewCrashCount() + 1)
+                ?.commit()
+        }
+    }
+
+    /** The user set Safe mode explicitly. A manual choice is never auto-overridden; turning it off also
+     * clears the crash back-off. */
+    fun setSafePreviewManual(on: Boolean) {
+        runCatching {
+            val e = prefs()?.edit()?.putBoolean(K_SAFE_PREVIEW, on)?.putBoolean(K_SAFE_AUTO, false)
+            if (!on) e?.putInt(K_SAFE_CRASH_COUNT, 0)
+            e?.commit()
+        }
+    }
+
+    /** Clear an AUTO-enabled Safe mode after a confirmed successful full-effects session. No-op when Safe
+     * mode was set manually, so the user's choice always stands. */
+    fun clearSafePreviewAfterSuccess() {
+        if (!isSafePreviewAuto()) return
+        runCatching {
+            prefs()?.edit()
+                ?.putBoolean(K_SAFE_PREVIEW, false)
+                ?.putBoolean(K_SAFE_AUTO, false)
+                ?.putInt(K_SAFE_CRASH_COUNT, 0)
+                ?.commit()
+        }
+    }
+
+    /** Whether the editor should attempt the full-effects pipeline as a guarded recovery trial on open. */
+    fun shouldRecoveryTrial(): Boolean = SafePreviewPolicy.shouldTrial(
+        isSafePreview(), isSafePreviewAuto(), safePreviewCrashCount(),
+    )
+
+    /** Kept for compatibility; prefer the typed helpers above. */
     fun setSafePreview(on: Boolean) { runCatching { prefs()?.edit()?.putBoolean(K_SAFE_PREVIEW, on)?.commit() } }
 }

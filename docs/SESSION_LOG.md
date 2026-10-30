@@ -745,3 +745,31 @@ unreliable.
   untouched. HONEST: the simplified player is the most likely cause of the stop (not 100% proven w/o
   device logs); software decode is the proven-reliable lever (same as FrameExtractor). Needs Shane's
   on-device confirmation that playback now runs through transitions; perf of software 1080p to watch.
+
+## 2026-10-30 — Session 32 (v0.4.23-media3) — Safe-mode auto-recovery + MediaTek software fallback
+- Root cause of the two-phone difference confirmed: Fold5 (Qualcomm) was stuck in auto-Safe-mode from an
+  earlier test-build crash (no Details = no CompositionPlayer attempt). Turning Safe mode off made the
+  Fold5 run full-effects perfectly. Phone 2 (MediaTek, c2.mtk) genuinely can't run CompositionPlayer ->
+  simplified raw ExoPlayer -> hardware decode stops at the 2nd same-source clip. Transitions show while
+  scrubbing (FrameExtractor software, per-frame) but not during playback (raw) -- architectural.
+- Implemented (approved plan, stricter recovery):
+  * SafePreviewPolicy (core, pure, unit-tested): shouldTrial/skipFullEffects; MAX_TRIAL_CRASHES=2,
+    STABILITY_MS=5000. +4 unit tests.
+  * CrashReporter: K_SAFE_AUTO + K_SAFE_CRASH_COUNT; enableSafePreviewAfterCrash (auto+count++),
+    setSafePreviewManual (auto=false; off resets count), clearSafePreviewAfterSuccess (no-op if manual),
+    shouldRecoveryTrial. CrashReportDialog uses enableSafePreviewAfterCrash.
+  * PreviewController: new onFirstFrame callback fired from CompositionPlayer onRenderedFirstFrame
+    (confirmed it dispatches via SimpleBasePlayer). MediaTek: raw player uses PREFER_SOFTWARE from the
+    start for error-driven fallback (cause!=null, sticky); AnalyticsListener captures the real decoder
+    name -> appended to Details as [raw=...]; reactive software retry kept for the Safe-mode path.
+  * VideoEditorScreen: recoveryTrial on open (attempt full-effects if auto-safe & back-off not spent);
+    clear auto-Safe only after full-effects first frame + stable 5s (cancelled if it falls back);
+    manual toggle -> setSafePreviewManual + ends trial; always-visible "Safe preview mode is on" banner
+    with one-tap Turn off. Guide text updated.
+- STRICTER per Shane: clear ONLY on confirmed full-effects success (init + frame rendered + stable 5s),
+  never just "open 5s"; manual never auto-overridden; keep counter + back-off.
+- Fold5 untouched (recovery only runs when auto-safe; Fold5 is manual-off). Export untouched; no feature
+  removal; no INTERNET; permanent key; main/0.4.15 untouched. versionCode 29 / 0.4.23-media3.
+- HONEST: recovery trial + decoder behaviour are device-verified by Shane; CI verifies compile + unit
+  tests (emulator unreliable). Edge: a device that crashed once then gracefully falls back (no crash,
+  no full success) keeps trialing and isn't auto-cleared -- per the stricter rule; user can clear manually.

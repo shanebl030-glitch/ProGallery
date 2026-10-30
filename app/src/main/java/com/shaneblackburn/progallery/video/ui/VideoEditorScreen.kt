@@ -167,7 +167,15 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     var settings by remember { mutableStateOf(VideoExportSettings()) }
     // Safe preview mode skips the GPU effects pipeline in the preview (effects still export).
     // Persisted; auto-enabled after a video-editor crash so the device isn't stuck crash-looping.
-    var safeMode by remember { mutableStateOf(com.shaneblackburn.progallery.CrashReporter.isSafePreview()) }
+    // Auto-recovery: if Safe mode was auto-enabled (not chosen by the user) and the crash back-off isn't
+    // spent, attempt the full-effects pipeline this session instead of forcing the raw player. It's
+    // cleared only after a CONFIRMED successful full-effects session (first frame rendered + stable).
+    val recoveryTrial = remember { com.shaneblackburn.progallery.CrashReporter.shouldRecoveryTrial() }
+    var safeMode by remember {
+        mutableStateOf(if (recoveryTrial) false else com.shaneblackburn.progallery.CrashReporter.isSafePreview())
+    }
+    var recoveryActive by remember { mutableStateOf(recoveryTrial) }
+    var fullFirstFrame by remember { mutableStateOf(false) }
     // Opt-in sync diagnostic (long-press the timecode to toggle). Shows the playhead position, the
     // player's actual reported position and the frame they map to, so a sync mismatch can be read
     // off the screen instead of guessed at. Off by default; no cost unless shown.
@@ -211,12 +219,27 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
             context,
             onPlayingChanged = { playing = it },
             onError = { previewError = it },
+            onFirstFrame = { fullFirstFrame = true },
             onMode = { simplifiedPreview = it == com.shaneblackburn.progallery.video.PreviewMode.SIMPLIFIED },
             onFallbackReason = { fallbackReason = it },
             safeMode = { safeMode },
         )
     }
     DisposableEffect(Unit) { onDispose { preview.release() } }
+    // Safe-mode recovery: clear an AUTO-enabled Safe mode only after a CONFIRMED successful full-effects
+    // session — CompositionPlayer stayed in full mode, rendered a frame (fullFirstFrame), and remained
+    // stable for the window. If it falls back to simplified (simplifiedPreview flips) the delay is
+    // cancelled and nothing clears; a crash re-arms Safe mode via the crash handler. Manual Safe mode is
+    // never cleared here (clearSafePreviewAfterSuccess is a no-op unless Safe mode was auto-enabled).
+    LaunchedEffect(recoveryActive, fullFirstFrame, simplifiedPreview) {
+        if (recoveryActive && fullFirstFrame && !simplifiedPreview) {
+            kotlinx.coroutines.delay(com.shaneblackburn.progallery.core.video.SafePreviewPolicy.STABILITY_MS)
+            if (!simplifiedPreview) { // still full-effects after the stability window
+                com.shaneblackburn.progallery.CrashReporter.clearSafePreviewAfterSuccess()
+                recoveryActive = false
+            }
+        }
+    }
     // On-demand composed preview: when the full-effects live player can't run the composition and falls
     // back to the simplified (raw) player, render the EXACT export frame — colour, geometry and the
     // transition — at the playhead via Media3 FrameExtractor (software decode) and show it while paused
@@ -375,6 +398,21 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                     Text("${missing.size} source file(s) can't be found (deleted, moved or access removed).",
                         style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = vm::removeMissing) { Text("Remove them") }
+                }
+            }
+        }
+
+        // Always-visible indicator so it's clear when Safe preview mode is on, with a one-tap way off.
+        if (safeMode) {
+            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Safe preview mode is on — live effects are off; they still apply on export.",
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        safeMode = false
+                        recoveryActive = false
+                        com.shaneblackburn.progallery.CrashReporter.setSafePreviewManual(false)
+                    }) { Text("Turn off") }
                 }
             }
         }
@@ -574,7 +612,11 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                     onMusic = { pickMusic.launch(arrayOf("audio/*")) },
                     onCommit = vm::commit,
                     safePreview = safeMode,
-                    onSafePreview = { on -> safeMode = on; com.shaneblackburn.progallery.CrashReporter.setSafePreview(on) },
+                    onSafePreview = { on ->
+                        safeMode = on
+                        recoveryActive = false // a manual choice ends any auto-recovery trial
+                        com.shaneblackburn.progallery.CrashReporter.setSafePreviewManual(on)
+                    },
                 )
             }
         }

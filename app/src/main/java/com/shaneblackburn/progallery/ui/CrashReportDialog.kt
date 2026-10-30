@@ -32,7 +32,7 @@ fun CrashReportDialog() {
     val context = LocalContext.current
     var pending by remember { mutableStateOf(CrashReporter.hasPendingCrash()) }
     val autoSafe = remember { pending && CrashReporter.crashedInVideo() }
-    remember { if (autoSafe) CrashReporter.setSafePreview(true); 0 }
+    remember { if (autoSafe) CrashReporter.enableSafePreviewAfterCrash(); 0 }
     var showFull by remember { mutableStateOf(false) }
     if (!pending) return
 
@@ -46,7 +46,7 @@ fun CrashReportDialog() {
             Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
                 Text(
                     buildString {
-                        if (autoSafe) append("Safe preview mode has been turned on so you can keep editing (effects still apply to exported videos).\n\n")
+                        if (autoSafe) append("Safe preview mode has been turned on so you can keep editing (effects still apply to exported videos). The editor will try the full preview again next time you open it, and turn Safe mode back off if it works.\n\n")
                         append("You can email the report to Shane so the crash can be fixed. ")
                         append(CrashReporter.whatsIncluded())
                     },

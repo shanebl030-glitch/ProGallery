@@ -2,6 +2,45 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.23-media3] — 2026-10-30 — Safe-mode auto-recovery + MediaTek software-decode fallback — DEVICE-TEST BUILD
+
+Two built-in-editor improvements. Branch build; not on `main`. Export, transitions, effects and the
+paused/scrubbing composed preview are all unchanged; the Fold5's working full-effects playback is
+untouched (the changes only affect Safe mode and the raw fallback player).
+
+### Safe Preview Mode auto-recovery
+A past editor crash no longer leaves a capable device permanently in reduced preview mode (this is why
+the Fold5 sat in Safe mode until it was turned off by hand).
+- Safe mode now records whether it was enabled **automatically** (after a crash) or **manually**.
+- An auto-enabled Safe mode gets a guarded **recovery trial**: the next editor session attempts the
+  full-effects pipeline instead of forcing the raw player.
+- It is cleared **only after a confirmed successful full-effects session** — CompositionPlayer stays in
+  full mode, actually renders a frame (`onRenderedFirstFrame`), and remains stable for ~5 s. Merely
+  staying open, or falling back to the raw player, does **not** clear it.
+- A crash during the trial re-arms Safe mode and counts it; after 2 consecutive crashes with no success,
+  auto-trialing stops (stay safe) to avoid a crash loop.
+- **Manual** Safe mode is never auto-overridden.
+- A banner at the top of the editor now shows when Safe mode is on, with a one-tap **Turn off**.
+
+### MediaTek playback fallback (raw playback no longer stops at a transition)
+When CompositionPlayer can't run a timeline and the raw player takes over, the raw player is now built
+with a **software decoder from the start** (`MediaCodecSelector.PREFER_SOFTWARE`), so continuous
+playback decodes the second same-source clip and **plays through** instead of stopping (the MediaTek
+`c2.mtk.avc.decoder` failure). The fallback **Details** now records the **actual decoder** selected,
+e.g. `[raw=c2.android.avc.decoder]`, so software decoding can be verified; if playback still fails,
+the decoder name plus the existing diagnostics show why. Hardware stays the default fast path for Safe
+mode unless a decode error forces the switch.
+
+### Scope preserved
+Export (Transformer) untouched; all transitions/effects/editing intact; no new permissions (INTERNET
+still absent); permanent signing key, package name and `Created by Shane BlackbuRn` credit preserved;
+`main`/0.4.15 untouched; versionCode 29 / 0.4.23-media3.
+
+### To confirm on device
+- A device left in auto-Safe-mode recovers next session once the full preview runs; the Fold5 keeps
+  working full-effects; a deliberately-crashing case re-arms and backs off.
+- The MediaTek phone plays **through** the transition (raw, no stop) with `[raw=…]` showing software.
+
 ## [0.4.22-media3] — 2026-10-30 — continuous playback no longer stops at a transition — DEVICE-TEST BUILD
 
 Fixes the remaining built-in-editor issue: during continuous playback, the preview stopped when it

@@ -12,6 +12,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.transformer.CompositionPlayer
 import androidx.media3.ui.PlayerView
@@ -45,6 +46,9 @@ class PreviewController(
     /** null clears any error; non-null is a user-facing message. */
     private val onError: (String?) -> Unit = {},
     private val onReady: () -> Unit = {},
+    /** Fired when the FULL-effects CompositionPlayer renders its first frame — the "it really works"
+     * signal used by Safe-mode recovery. Not fired for the simplified player. */
+    private val onFirstFrame: () -> Unit = {},
     private val onMode: (PreviewMode) -> Unit = {},
     /** Full technical reason the full-effects preview fell back (for diagnostics), or null. */
     private val onFallbackReason: (String?) -> Unit = {},
@@ -75,6 +79,13 @@ class PreviewController(
     // runs through the whole timeline instead of stopping. Sticky: this path is the degraded fallback
     // anyway, and a device that needs software once needs it for the rest of the session.
     private var simplePlayerSoftware = false
+    // Diagnostics for the simplified (raw) player, surfaced in the fallback Details so a continuing
+    // playback stop can be investigated on the phone without logcat: the cause we fell back for, and the
+    // ACTUAL video decoder the raw player selected (c2.android.* = software, c2.mtk.*/c2.qti.* = hardware).
+    // If Details shows a software decoder and playback still stops at the transition, the stop is not the
+    // raw decoder and the cause is elsewhere.
+    private var lastSimpleCause: Throwable? = null
+    private var rawDecoderName: String? = null
     // Diagnostic surfaced in the fallback "Details" text so the prewarming-retry outcome is visible
     // on the phone WITHOUT logcat. Reflects the attempt that actually fell back:
     //   NO-API             reflection unavailable in this Media3 build (no retry possible)
@@ -166,6 +177,11 @@ class PreviewController(
                         onReady()
                     }
                 }
+                override fun onRenderedFirstFrame() {
+                    // The full-effects pipeline actually produced a frame on this device — the signal
+                    // Safe-mode recovery waits for before it will clear an auto-enabled Safe mode.
+                    if (player === p) onFirstFrame()
+                }
                 override fun onPlayerError(error: PlaybackException) {
                     // Don't release the CompositionPlayer from inside its own error callback
                     // (re-entrant release throws IllegalStateException). Defer to the next tick.
@@ -215,10 +231,17 @@ class PreviewController(
     @MainThread
     private fun startSimplePlayer(project: VideoProject, target: Long, wasPlaying: Boolean, cause: Throwable?): Boolean {
         releasePlayer()
+        lastSimpleCause = cause
+        rawDecoderName = null
+        // For an ERROR-DRIVEN fallback (CompositionPlayer couldn't run this timeline), go straight to a
+        // software decoder: if the full pipeline failed, the raw hardware decoder is likely to fail too
+        // (e.g. the 2nd clip of a same-source cut), and software decodes these clips reliably (it's what
+        // the composed-frame preview already uses). Safe mode (cause == null) keeps the hardware fast path
+        // unless a decode error later forces the switch. Sticky, so it doesn't re-switch repeatedly.
+        val useSoftware = simplePlayerSoftware || cause != null
+        if (useSoftware) simplePlayerSoftware = true
         if (cause != null) {
-            // Record exactly why the effects pipeline failed, so a device-specific issue can be
-            // diagnosed from the app (and logcat) without needing the source video.
-            val reason = buildReason(project, cause)
+            val reason = buildReason(project, cause) + " [raw=pending]"
             android.util.Log.e("PreviewController", "effects preview failed; using simplified playback. $reason", cause)
             onFallbackReason(reason)
         } else {
@@ -226,14 +249,25 @@ class PreviewController(
         }
         if (project.clips.isEmpty()) { onError(cause?.let { diagnose(project, it) }); return false }
         return try {
-            // On a device proven unable to hardware-decode a clip in this timeline, build the raw player
-            // with a software decoder so continuous playback runs through every clip (incl. the 2nd clip
-            // of a same-source cut at a transition). Hardware stays the default fast path otherwise.
-            val exo = if (simplePlayerSoftware) {
+            val exo = if (useSoftware) {
                 ExoPlayer.Builder(context, DefaultRenderersFactory(context).setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)).build()
             } else {
                 ExoPlayer.Builder(context).build()
             }
+            // Report the actual decoder the raw player selected, into the fallback Details.
+            exo.addAnalyticsListener(object : AnalyticsListener {
+                override fun onVideoDecoderInitialized(
+                    eventTime: AnalyticsListener.EventTime,
+                    decoderName: String,
+                    initializedTimestampMs: Long,
+                    initializationDurationMs: Long,
+                ) {
+                    if (player !== exo) return
+                    rawDecoderName = decoderName
+                    android.util.Log.i("PreviewController", "simplified player video decoder = $decoderName")
+                    refreshFallbackReason()
+                }
+            })
             // Frame-accurate seeking so scrubbing and frame-step land on the exact frame the
             // playhead points at (the default snaps to the nearest sync sample).
             exo.setSeekParameters(SeekParameters.EXACT)
@@ -309,6 +343,13 @@ class PreviewController(
         val info = firstVideoInfo(project)
         val fmt = info?.summary()?.let { " ($it)" } ?: ""
         return "Simplified preview$fmt — colour, speed and effects apply on export."
+    }
+
+    /** Re-emit the fallback Details with the raw player's actual video decoder appended, once known. */
+    private fun refreshFallbackReason() {
+        val proj = current ?: return
+        val cause = lastSimpleCause ?: return
+        onFallbackReason(buildReason(proj, cause) + " [raw=${rawDecoderName ?: "pending"}]")
     }
 
     /** A detailed technical reason string: error code, message, cause chain and clip format. */
