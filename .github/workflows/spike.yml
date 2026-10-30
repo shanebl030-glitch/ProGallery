@@ -60,25 +60,33 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            adb devices
+            set -x
+            adb wait-for-device
+            adb shell getprop sys.boot_completed
+            APP=$(find app/build/outputs/apk/debug -name '*.apk' | head -1)
+            TEST=$(find app/build/outputs/apk/androidTest -name '*.apk' | head -1)
+            echo "APP=$APP"; echo "TEST=$TEST"
+            adb install -r -g "$APP"
+            adb install -r -g "$TEST"
             adb logcat -c || true
             adb logcat -v time > logcat.txt &
-            set +e
-            ./gradlew :app:connectedDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.shaneblackburn.progallery.ExoPlayerPreviewEngineSpikeTest \
-              --stacktrace 2>&1 | tee connected.log
-            echo "gradle-exit=${PIPESTATUS[0]}" | tee -a connected.log
-            set -e
+            LOGPID=$!
+            # Run only the spike test directly via the instrumentation runner (no gradle in-emulator).
+            adb shell am instrument -w \
+              -e class com.shaneblackburn.progallery.ExoPlayerPreviewEngineSpikeTest \
+              com.shaneblackburn.progallery.debug.test/androidx.test.runner.AndroidJUnitRunner \
+              2>&1 | tee instrument.log
             sleep 3
+            kill "$LOGPID" 2>/dev/null || true
             grep -a "SpikeExo" logcat.txt > spike-log.txt || true
-            echo "=== SpikeExo RESULT lines ==="
-            cat spike-log.txt || echo "(none captured)"
+            echo "=== instrument.log tail ==="; tail -40 instrument.log || true
+            echo "=== SpikeExo RESULT lines ==="; cat spike-log.txt || echo "(none captured)"
 
       - name: Collect + publish spike results
         if: always()
         run: |
           mkdir -p out
-          cp logcat.txt spike-log.txt connected.log out/ 2>/dev/null || true
+          cp logcat.txt spike-log.txt instrument.log out/ 2>/dev/null || true
           find app/build/outputs -path '*androidTest-results*' -name '*.xml' -exec cp {} out/ \; 2>/dev/null || true
           if [ -d app/build/reports/androidTests/connected ]; then cp -r app/build/reports/androidTests/connected out/connected-report; fi
           find app/build/outputs/apk -name 'app-debug.apk' -exec cp {} out/ \; 2>/dev/null || true
