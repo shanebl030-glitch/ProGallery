@@ -15,22 +15,6 @@ import com.shaneblackburn.progallery.core.video.ClipEdge
 import com.shaneblackburn.progallery.core.video.TransitionUniforms
 
 /**
- * DIAGNOSTIC-ONLY readout (v0.4.25.1-diag). Records what the GPU transition shader actually sees for
- * the clip it last rendered, so the live overlay (Sync check) can confirm the Media3 timestamp mapping
- * before the real timing fix is implemented. Writing these volatile fields does NOT affect rendering,
- * playback or export — the shader still uses the existing `firstUs` logic for the actual transition.
- */
-object TransitionDiag {
-    @Volatile var clipIndex: Int = -1
-    @Volatile var ptsMs: Long = 0L          // presentationTimeUs the shader received, in ms (ground truth)
-    @Volatile var firstUsMs: Long = 0L      // the first-frame anchor currently used, in ms
-    @Volatile var clipStartMs: Long = 0L    // calculated clip start (sum of earlier clips' output durations)
-    @Volatile var clipDurMs: Long = 0L      // this clip's output (timeline) duration
-    @Volatile var tFirstUsMs: Long = 0L     // clip time the CURRENT code computes (pts - firstUs)
-    @Volatile var tCalcMs: Long = 0L        // clip time the PROPOSED fix would compute (pts - clipStartMs)
-}
-
-/**
  * Per-clip transition effect: fades, blur, zoom, cross-zoom, whip pan, push/slide, wipe, iris,
  * light leak and glitch, applied in the clip's own time window(s).
  *
@@ -43,26 +27,30 @@ object TransitionDiag {
  * Placed last in a clip's video-effect list so the frame timestamps it sees are the clip's
  * 0-based output time (after speed/trim), matching [ClipEdge].
  *
+ * Transition time is the clip's 0-based OUTPUT time. In continuous playback and export it is the
+ * frame's presentation time minus the clip's start on the composition's output timeline
+ * ([clipStartMs], the sum of earlier clips' output durations, supplied by [ProjectComposer]). This is
+ * seek-independent: the transition is always evaluated at the true timeline position, whatever frame
+ * the shader happens to render first (confirmed on-device — Media3 delivers the global output time as
+ * the frame's presentationTimeUs). The earlier "time since the first frame seen" anchor was only
+ * correct when decoding reached a clip in order from its start; after a seek it anchored to an
+ * arbitrary frame and rendered the incoming transition across the whole clip.
+ *
  * [fixedTimeMs] handles single-frame extraction (the on-demand composed preview via Media3
- * FrameExtractor). There, only ONE frame is rendered per request, so the usual
- * "time since the first frame seen" logic would always read as t=0 and freeze the transition at its
- * start. When [fixedTimeMs] is supplied it returns the clip's output time to evaluate the transition
- * at — the caller already knows the exact playhead position it is extracting. It is read per frame
- * (it may be a live provider), so one effect instance can serve successive scrub positions without
- * being rebuilt. When null (continuous playback and export) the original frame-relative timing is used
- * unchanged, so those paths are byte-for-byte identical to before.
+ * FrameExtractor): when supplied it returns the clip's output time directly (the caller knows the exact
+ * playhead position it is extracting), bypassing the timestamp maths. This path is currently unused —
+ * the composed preview applies the transition on the CPU (TransitionCpu) — but kept as a hook.
  */
 @OptIn(UnstableApi::class)
 class ClipTransitionEffect(
     private val edge: ClipEdge,
     private val fixedTimeMs: (() -> Long)? = null,
-    // Diagnostic-only: the clip's index and its calculated start on the output timeline. Used solely to
-    // populate [TransitionDiag]; they do NOT change how the transition is rendered (that still uses firstUs).
+    /** This clip's start on the composition output timeline (ms) = sum of earlier clips' output
+     *  durations. Subtracted from the frame's presentation time to get the clip's 0-based output time. */
     private val clipStartMs: Long = 0L,
-    private val clipIndex: Int = -1,
 ) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        ClipTransitionShaderProgram(edge, useHdr, fixedTimeMs, clipStartMs, clipIndex)
+        ClipTransitionShaderProgram(edge, useHdr, fixedTimeMs, clipStartMs)
 
     companion object {
         fun needed(edge: ClipEdge) = edge.isActive
@@ -75,7 +63,6 @@ private class ClipTransitionShaderProgram(
     useHdr: Boolean,
     private val fixedTimeMs: (() -> Long)? = null,
     private val clipStartMs: Long = 0L,
-    private val clipIndex: Int = -1,
 ) : BaseGlShaderProgram(useHdr, 1) {
 
     private val program: GlProgram = try {
@@ -85,29 +72,15 @@ private class ClipTransitionShaderProgram(
     } catch (e: GlUtil.GlException) {
         throw VideoFrameProcessingException(e)
     }
-    private var firstUs = Long.MIN_VALUE
-
     override fun configure(inputWidth: Int, inputHeight: Int): Size = Size(inputWidth, inputHeight)
 
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
-        val tMs = fixedTimeMs?.invoke() ?: run {
-            // Continuous playback / export: time since the first frame this program saw, which is the
-            // clip's 0-based output time.
-            if (firstUs == Long.MIN_VALUE) firstUs = presentationTimeUs
-            (presentationTimeUs - firstUs) / 1000
-        }
+        // Clip's 0-based OUTPUT time: the frame's position on the composition output timeline
+        // (presentationTimeUs) minus this clip's start on that timeline. Seek-independent — correct
+        // whatever frame renders first — unlike the old "first frame seen" anchor. [fixedTimeMs], when
+        // supplied, overrides with a caller-known output time (single-frame extraction).
+        val tMs = fixedTimeMs?.invoke() ?: (presentationTimeUs / 1000 - clipStartMs)
         val u: TransitionUniforms = edge.uniformsAt(tMs)
-        // DIAGNOSTIC (read-only): record what this clip's shader actually saw so the Sync-check overlay
-        // can confirm the timestamp mapping. Does not influence the uniforms/rendering above or below.
-        if (clipIndex >= 0) {
-            TransitionDiag.clipIndex = clipIndex
-            TransitionDiag.ptsMs = presentationTimeUs / 1000
-            TransitionDiag.firstUsMs = if (firstUs == Long.MIN_VALUE) 0L else firstUs / 1000
-            TransitionDiag.clipStartMs = clipStartMs
-            TransitionDiag.clipDurMs = edge.durationMs
-            TransitionDiag.tFirstUsMs = tMs
-            TransitionDiag.tCalcMs = presentationTimeUs / 1000 - clipStartMs
-        }
         // A seed that changes a few times a second, so the glitch flickers.
         val seed = ((presentationTimeUs / 60_000L) % 997L).toFloat()
         try {

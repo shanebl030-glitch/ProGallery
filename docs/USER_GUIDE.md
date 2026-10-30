@@ -91,8 +91,9 @@ The same content is available inside the app under **Library → Settings → Us
   - How they look: Fade/Wipe/Iris pass *through black (or white)* at the cut; Whip pan/Push
     slide *through black*. A true cross-dissolve (both clips blended at once), reveal wipes/
     pushes, and J-/L audio cuts need two-clip compositing and are planned for the next update.
-  - When you pause or scrub, each transition previews exactly at its own cut; with several
-    transitions on one timeline, the footage between them stays untouched.
+  - Each transition is shown exactly at its own cut — whether you pause, scrub, or start
+    playback from anywhere in the timeline; with several transitions on one timeline, the
+    footage between them stays untouched.
 - **Text** adds a timed title (fade, slide-up or pop animation). **Music** adds a
   background track (volume, start point, loop, fade in/out). **Frame** sets 1:1, 9:16,
   16:9 or 4:5. **Fade in/out** from or to black or white.

@@ -888,3 +888,29 @@ unreliable.
 - versionCode 32 / 0.4.25.1-media3-diag (installs over 0.4.25; same permanent key). CI filename
   ProGallery-0.4.25.1.apk. main/v0.4.15 untouched; export behaviour unchanged. Real GPU timing fix is
   gated on this diagnostic's confirmation.
+
+## 2026-10-31 — Session 37 (v0.4.26-media3) — GPU transition timing fix (seek-independent)
+- Diagnostic (0.4.25.1) confirmed on the Fold5: shader pts ≈ playhead pos (global output time), and
+  pts − clipStartMs == true clip-relative time (matched the Sync "off" value), while the old
+  firstUs anchor gave t = −6633 ms (negative → incoming Ripple clamped to full = the flood). Trim handled
+  (src 46.26s vs off 7.26s; start(calc) in output time lined up). Export-equivalence shown: in-order,
+  firstUs == clipStart, so switching changes nothing for export/play-from-start.
+- Fix implemented (approved): ClipTransitionEffect computes tMs = presentationTimeUs/1000 − clipStartMs
+  (clipStartMs = sum of earlier clips' timelineDurationMs, passed from ProjectComposer.editedItem →
+  transitionEffect). Removed the firstUs field/anchor. fixedTimeMs hook kept (currently unused; CPU
+  preview uses TransitionCpu). Removed all 0.4.25.1 diagnostic code (TransitionDiag, the Sync TX lines,
+  transDiagTick). ProjectComposer clipIndex arg dropped (was diagnostic); clipStartMs is now functional.
+- Scope: ClipTransitionEffect is shared by playback AND export, but the change is behaviour-preserving for
+  in-order processing (export never seeks), so export output is unchanged. CompositionPlayer, decoding,
+  speed/trim/colour, and the v0.4.25 composed-CPU scrub path are all untouched.
+- NOTE (out of scope, logged for later): TimedTextOverlay (titles, a composition-level effect) uses the
+  same firstUs pattern and may have an analogous seek-timing issue for titles; not reported, not verified,
+  left untouched.
+- Tests: +2 core (121 total, all pass): clipStart + global time reconstructs the true clip-relative time
+  with trim+speed (the GPU fix's formula == framePreviewSpec.inClipTimelineMs); and the negative-anchor
+  mechanism (sampleAt(−6633) → full incoming Ripple; true mid-clip time → identity; windows confined).
+- versionCode 33 / 0.4.26-media3. main/v0.4.15 untouched; permanent key, package, identity, no-INTERNET
+  preserved. CHANGELOG + guide updated. CI filename ProGallery-0.4.26.apk.
+- HONEST / device-check: core math unit-verified; mapping proven on-device via the diagnostic. Needs Fold5
+  confirmation that live playback after a mid-clip seek now shows normal footage until the next transition
+  (all transition types), and a quick export sanity check that transitions still land correctly.

@@ -169,6 +169,55 @@ class TransitionScrubTest {
         assertTrue(p.usesComposedTransitionPreview(1_000L) && p.usesComposedTransitionPreview(19_000L))
     }
 
+    // ---- GPU live-playback timing (v0.4.26 fix) ----
+    // The GPU effect computes clip-relative transition time as (presentationTimeUs/1000 − clipStartMs),
+    // where presentationTimeUs is the composition's global OUTPUT time and clipStartMs is the sum of
+    // earlier clips' output durations. These tests prove that value equals the true clip-relative output
+    // time the (already-correct) position path uses, and that the old wrong anchor is what caused the
+    // incoming transition to flood a clip.
+
+    private fun clipStartMs(p: VideoProject, idx: Int): Long = p.clips.take(idx).sumOf { it.timelineDurationMs }
+
+    @Test fun clipStartPlusGlobalTimeReconstructsTrueClipTimeWithTrimAndSpeed() {
+        // Clip 1 is trimmed AND sped up (2×), so its output duration differs from its source span —
+        // exactly the case that must still map correctly (Shane's clip was trimmed; speed is the harder one).
+        val c1 = clip(1, 12_000).withTrim(2_000, 10_000).copy(speed = 2f) // trimmed 8s @2× → 4000 ms output
+        val p = VideoProject(listOf(c1, clip(2, 6_000), clip(3, 6_000)))
+            .setTransition(0, Transition(TransitionType.RIPPLE, 1_000))
+            .setTransition(1, Transition(TransitionType.BLUR, 1_000))
+        assertEquals(4_000L, c1.timelineDurationMs, "trim+speed output duration")
+        // For global output positions inside each clip, the fix's time = globalPos − clipStartMs must
+        // equal framePreviewSpec().inClipTimelineMs (the true clip-relative output time).
+        for (globalPos in 0L..15_990L step 30L) {
+            val spec = p.framePreviewSpec(globalPos)
+            val fixTime = globalPos - clipStartMs(p, spec.clipIndex)
+            // Interior of a clip only (the spec clamps the last ms of each clip); allow the clamp at edges.
+            val clipDur = p.clips[spec.clipIndex].timelineDurationMs
+            val interior = globalPos - clipStartMs(p, spec.clipIndex)
+            if (interior in 0 until clipDur) {
+                assertEquals(spec.inClipTimelineMs, fixTime,
+                    "at global $globalPos the fix's clip time must equal the true clip-relative time")
+            }
+        }
+    }
+
+    @Test fun wrongAnchorFloodsIncomingTransitionButTrueTimeDoesNot() {
+        // Reproduces the mechanism from the on-device capture: clip 2 is 14100 ms with incoming Ripple.
+        val edge = VideoProject(listOf(clip(1, 29_267), clip(2, 14_100), clip(3, 6_000)))
+            .setTransition(0, Transition(TransitionType.RIPPLE, 1_400))
+            .setTransition(1, Transition(TransitionType.BLUR, 1_400))
+            .clipEdge(1)
+        // Old code (firstUs anchored near the clip END) produced a NEGATIVE clip time → full incoming ripple.
+        val wrong = edge.sampleAt(-6_633)
+        assertTrue(wrong.type == TransitionType.RIPPLE && wrong.incoming && wrong.edge == 1f,
+            "a negative/mis-anchored time clamps the incoming Ripple to full — the reported bug")
+        // The fix's true clip-relative time (mid-clip) is plain footage.
+        assertTrue(edge.uniformsAt(7_333).isIdentity, "the true mid-clip time shows no transition")
+        // And the incoming Ripple is confined to the clip's head, the outgoing Blur to its tail.
+        assertTrue(edge.sampleAt(100).type == TransitionType.RIPPLE && edge.sampleAt(100).incoming)
+        assertTrue(edge.sampleAt(14_000).type == TransitionType.BLUR && !edge.sampleAt(14_000).incoming)
+    }
+
     // ---- render helpers (same approach as TransitionCpuTest) ----
 
     private val w = 48

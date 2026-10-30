@@ -2,6 +2,28 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.26-media3] — 2026-10-31 — Transitions correct during live playback after a seek — DEVICE-TEST BUILD
+
+Fixes live GPU playback showing a transition in the wrong place when playback starts after a seek.
+Branch build; not on `main`.
+
+### Transition timing no longer depends on where playback started
+If you seeked into the middle of a clip and pressed Play, that clip's incoming transition (e.g. Ripple)
+played across the whole clip until the next cut. Playing from the start was always fine.
+- Root cause: the GPU transition effect worked out a clip's position in its transition from "the first
+  frame this shader saw," which is only the clip's start when decoding reaches it in order. After a seek
+  the first frame is at an arbitrary position, so the clip's zero-point was wrong and the incoming
+  transition evaluated as fully active across the clip. Confirmed on-device with a diagnostic build
+  (0.4.25.1): the shader receives the composition's global output time, and the clip's true time is that
+  minus the clip's start on the timeline.
+- Fix: the effect now computes the clip's transition time as `presentationTime − clipStart`, where
+  `clipStart` is the clip's start on the output timeline (sum of earlier clips' output durations, passed
+  from the composer). This is seek-independent, so playback shows the correct transition at any start
+  position. For in-order playback and export — the only way export ever runs — this is identical to the
+  old result (the first frame's time already equals the clip start), so **export is unchanged**.
+- The v0.4.25 paused/scrub fix (the separate composed-CPU preview) is untouched; GPU playback is now
+  correct too, so paused and playing agree. Affects every transition type, not just Ripple/Blur.
+
 ## [0.4.25-media3] — 2026-10-31 — Multiple-transition scrubbing fix — DEVICE-TEST BUILD
 
 Fixes a second transition-scrubbing problem found on the Galaxy Z Fold5 with two transitions on one

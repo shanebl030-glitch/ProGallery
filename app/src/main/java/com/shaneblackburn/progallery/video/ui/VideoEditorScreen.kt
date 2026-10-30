@@ -54,7 +54,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -182,8 +181,6 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     // off the screen instead of guessed at. Off by default; no cost unless shown.
     var showSyncDebug by remember { mutableStateOf(false) }
     var playerPosMs by remember { mutableLongStateOf(0L) }
-    // Diagnostic (v0.4.25.1): forces the Sync overlay to re-read TransitionDiag each sample tick.
-    var transDiagTick by remember { mutableIntStateOf(0) }
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     // Scroll the timeline programmatically to [ms], flagging it so the scrub collector doesn't treat
@@ -338,7 +335,7 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     }
     // Sample the player's real position for the opt-in sync diagnostic (see showSyncDebug).
     LaunchedEffect(showSyncDebug) {
-        while (showSyncDebug) { playerPosMs = preview.currentPositionMs; transDiagTick++; delay(120) }
+        while (showSyncDebug) { playerPosMs = preview.currentPositionMs; delay(120) }
     }
     // ---- Composed-frame preview driver (see frameRenderer above) --------------------------------
     // Decide when the paused/scrub still is drawn from the composed CPU frame rather than the live GPU
@@ -481,20 +478,10 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
                         "clip ${it.clipIndex + 1}/${project.clips.size}  src ${"%.2f".format(it.sourceMs / 1000.0)}s" +
                             "  off ${"%.2f".format(it.offsetInClipMs / 1000.0)}s"
                     } ?: "no clip"
-                    // Diagnostic (v0.4.25.1): read the GPU transition shader's actual timing, re-read each
-                    // sample tick (transDiagTick). Confirms whether pts is the global output time and whether
-                    // pts - clipStartMs recovers the true clip-relative time, vs the current pts - firstUs.
-                    @Suppress("UNUSED_EXPRESSION") transDiagTick // touch so recomposition re-reads the volatiles
-                    val d = com.shaneblackburn.progallery.video.TransitionDiag
-                    val expectedInClip = positionMs - d.clipStartMs   // true clip-relative output time (paused)
-                    val txLine = if (d.clipIndex < 0) "TX: (no transition frame rendered yet)" else
-                        "TX clip ${d.clipIndex + 1}  pts ${d.ptsMs}  first ${d.firstUsMs}  start(calc) ${d.clipStartMs}  dur ${d.clipDurMs}\n" +
-                            "t(firstUs)=${d.tFirstUsMs}   t(calc)=${d.tCalcMs}   pos-start=${expectedInClip}   pos=${positionMs}"
                     Text(
                         "SYNC  pos ${"%.2f".format(positionMs / 1000.0)}s   play ${"%.2f".format(playerPosMs / 1000.0)}s" +
                             "   Δ ${"%+.2f".format(delta / 1000.0)}s\n" +
-                            "${if (simplifiedPreview) "SIMPLE" else "FULL"}${if (safeMode) " (safe)" else ""}  $locLine\n" +
-                            txLine,
+                            "${if (simplifiedPreview) "SIMPLE" else "FULL"}${if (safeMode) " (safe)" else ""}  $locLine",
                         color = Color(0xFF66FF99), style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
                             .background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = 8.dp, vertical = 4.dp),
