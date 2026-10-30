@@ -39,6 +39,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,13 +106,17 @@ fun VideoPage(
     loop: Boolean,
     controlsVisible: Boolean,
     onToggleControls: () -> Unit,
+    onHideControls: () -> Unit,
     onRotate: () -> Unit,
     onEnded: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state = remember(uri) { PlayerUiState() }
     val currentOnEnded by rememberUpdatedState(onEnded)
+    val currentOnHide by rememberUpdatedState(onHideControls)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    // Bumped on any control interaction so the auto-hide countdown restarts (see below).
+    var interactTick by remember { mutableIntStateOf(0) }
 
     // Bind media when this page becomes active.
     DisposableEffect(player, uri, active) {
@@ -165,6 +170,18 @@ fun VideoPage(
         }
     }
 
+    // Auto-hide the controls while the video is PLAYING: 3 s after they appear (or after the last
+    // interaction, or when playback resumes). While PAUSED they stay on — the effect's condition is
+    // false, so no countdown runs — until playback starts again. Re-keyed on controlsVisible (a tap
+    // shows them and restarts the timer), isPlaying (resume starts it; pause cancels it) and
+    // interactTick (using a control restarts it). Manual hide just makes controlsVisible false.
+    LaunchedEffect(active, controlsVisible, state.isPlaying, interactTick) {
+        if (active && controlsVisible && state.isPlaying) {
+            delay(3_000)
+            currentOnHide()
+        }
+    }
+
     Box(modifier.fillMaxSize().background(Color.Black)) {
         if (active) {
             AndroidView(
@@ -190,13 +207,13 @@ fun VideoPage(
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.fillMaxSize(),
         ) {
-            VideoControls(player, state, onRotate)
+            VideoControls(player, state, onRotate, onInteract = { interactTick++ })
         }
     }
 }
 
 @Composable
-private fun VideoControls(player: ExoPlayer, state: PlayerUiState, onRotate: () -> Unit) {
+private fun VideoControls(player: ExoPlayer, state: PlayerUiState, onRotate: () -> Unit, onInteract: () -> Unit = {}) {
     var scrubbing by remember { mutableStateOf<Float?>(null) }
     var speedMenu by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
@@ -205,8 +222,9 @@ private fun VideoControls(player: ExoPlayer, state: PlayerUiState, onRotate: () 
             horizontalArrangement = Arrangement.spacedBy(28.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RoundButton({ player.seekBack() }, 48) { Icon(Icons.Outlined.Replay10, "Back 10 seconds", tint = Color.White) }
+            RoundButton({ onInteract(); player.seekBack() }, 48) { Icon(Icons.Outlined.Replay10, "Back 10 seconds", tint = Color.White) }
             RoundButton({
+                onInteract()
                 when {
                     state.ended -> { player.seekTo(0); player.play() }
                     player.isPlaying -> player.pause()
@@ -220,7 +238,7 @@ private fun VideoControls(player: ExoPlayer, state: PlayerUiState, onRotate: () 
                     modifier = Modifier.size(40.dp),
                 )
             }
-            RoundButton({ player.seekForward() }, 48) { Icon(Icons.Outlined.Forward10, "Forward 10 seconds", tint = Color.White) }
+            RoundButton({ onInteract(); player.seekForward() }, 48) { Icon(Icons.Outlined.Forward10, "Forward 10 seconds", tint = Color.White) }
         }
 
         Column(
@@ -233,10 +251,11 @@ private fun VideoControls(player: ExoPlayer, state: PlayerUiState, onRotate: () 
             val shown = scrubbing?.let { (it * duration).toLong() } ?: state.positionMs
             Slider(
                 value = scrubbing ?: (state.positionMs.toFloat() / duration).coerceIn(0f, 1f),
-                onValueChange = { scrubbing = it },
+                onValueChange = { onInteract(); scrubbing = it },
                 onValueChangeFinished = {
                     scrubbing?.let { player.seekTo((it * duration).toLong()) }
                     scrubbing = null
+                    onInteract()
                 },
                 colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White,
                     inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
@@ -248,26 +267,27 @@ private fun VideoControls(player: ExoPlayer, state: PlayerUiState, onRotate: () 
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
                 )
                 Box {
-                    TextButton(onClick = { speedMenu = true }) {
+                    TextButton(onClick = { onInteract(); speedMenu = true }) {
                         Text(speedLabel(state.speed), color = Color.White)
                     }
                     DropdownMenu(expanded = speedMenu, onDismissRequest = { speedMenu = false }) {
                         listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { sp ->
                             DropdownMenuItem(
                                 text = { Text(speedLabel(sp)) },
-                                onClick = { player.setPlaybackSpeed(sp); state.speed = sp; speedMenu = false },
+                                onClick = { onInteract(); player.setPlaybackSpeed(sp); state.speed = sp; speedMenu = false },
                             )
                         }
                     }
                 }
                 IconButton(onClick = {
+                    onInteract()
                     state.muted = !state.muted
                     player.volume = if (state.muted) 0f else 1f
                 }) {
                     Icon(if (state.muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                         if (state.muted) "Unmute" else "Mute", tint = Color.White)
                 }
-                IconButton(onClick = onRotate) { Icon(Icons.Outlined.ScreenRotation, "Rotate screen", tint = Color.White) }
+                IconButton(onClick = { onInteract(); onRotate() }) { Icon(Icons.Outlined.ScreenRotation, "Rotate screen", tint = Color.White) }
             }
         }
     }

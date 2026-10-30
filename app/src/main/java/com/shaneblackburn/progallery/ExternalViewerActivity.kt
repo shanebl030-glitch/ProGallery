@@ -62,7 +62,8 @@ class ExternalViewerActivity : FragmentActivity() {
                         DisposableEffect(Unit) { onDispose { player.release() } }
                         VideoPage(
                             player = player, uri = uri.toString(), active = true, autoPlay = true, loop = false,
-                            controlsVisible = chrome, onToggleControls = { chrome = !chrome }, onRotate = {}, onEnded = {},
+                            controlsVisible = chrome, onToggleControls = { chrome = !chrome }, onHideControls = { chrome = false },
+                            onRotate = {}, onEnded = {},
                         )
                     } else {
                         ZoomableAsyncImage(

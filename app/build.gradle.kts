@@ -22,8 +22,8 @@ android {
         applicationId = "com.shaneblackburn.progallery"
         minSdk = 29
         targetSdk = 35
-        versionCode = 33
-        versionName = "0.4.26-media3"
+        versionCode = 34
+        versionName = "0.4.27-media3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }

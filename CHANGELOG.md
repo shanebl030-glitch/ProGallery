@@ -2,6 +2,14 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.27-media3] — 2026-10-31 — Auto-hiding video controls
+
+Video viewer: while a video is playing, the playback controls (−10 s, play/pause, +10 s, seek bar,
+speed, mute, rotate) now fade out after 3 seconds for an unobstructed view. Tapping the video brings
+them back and restarts the 3-second timer; using any control also restarts it. While the video is
+paused, the controls stay on until playback resumes, then fade after 3 seconds. Applies in both the
+in-app viewer and when opening a video from another app.
+
 ## [0.4.26-media3] — 2026-10-31 — Transitions correct during live playback after a seek — DEVICE-TEST BUILD
 
 Fixes live GPU playback showing a transition in the wrong place when playback starts after a seek.

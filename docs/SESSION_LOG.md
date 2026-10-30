@@ -914,3 +914,20 @@ unreliable.
 - HONEST / device-check: core math unit-verified; mapping proven on-device via the diagnostic. Needs Fold5
   confirmation that live playback after a mid-clip seek now shows normal footage until the next transition
   (all transition types), and a quick export sanity check that transitions still land correctly.
+
+## 2026-10-31 — Session 38 (v0.4.27-media3) — auto-hiding video player controls
+- Shane: in the viewer, the video controls (−10s/pause/+10s etc.) stayed on during playback and only
+  hid on tap. Wanted: fade out 3s after playback starts; tap re-shows then hides after 3s; stay on while
+  paused; fade 3s after resuming.
+- VideoPlayer.VideoPage: added onHideControls callback + a LaunchedEffect keyed on
+  (active, controlsVisible, isPlaying, interactTick): when active && controlsVisible && isPlaying, wait 3s
+  then onHideControls(). Paused → condition false → controls stay. interactTick bumps on any control use
+  (seek back/fwd, play/pause, slider drag+commit, speed open/select, mute, rotate) so interaction restarts
+  the countdown. onHideControls = { chrome = false } in both callers (ViewerScreen, ExternalViewerActivity).
+- UI-only change; no media3/export/core changes. controls visibility is the shared `chrome` flag (also
+  drives immersive system bars), so playback goes fully immersive after 3s. Photos unchanged.
+- versionCode 34 / 0.4.27-media3. main/v0.4.15 untouched; permanent key/package/identity/no-INTERNET
+  preserved. CHANGELOG + guide updated. CI filename ProGallery-0.4.27.apk.
+- Device-check: confirm the 3s fade on play, tap-to-show, paused-stays-on, resume-fades behaviours on
+  the phone. Minor known edge: if the speed dropdown is left open >3s during playback the controls can
+  fade and close it (interaction resets the timer on open/select).

@@ -39,6 +39,7 @@ private val GUIDE: List<Pair<String, List<String>>> = listOf(
         "Pinch or double-tap to zoom. Tap once to hide or show the controls.",
         "Swipe up or tap the info button to see details: size, resolution, camera settings and location (if the photo has it and you allowed location access).",
         "Videos have play/pause, a seek bar, playback speed (0.25× to 2×), mute and rotate-to-fullscreen.",
+        "While a video plays, the controls fade out after 3 seconds for an unobstructed view. Tap the video to bring them back (they hide again after 3 seconds). When paused, the controls stay on until you play again.",
         "Use the slideshow button in the menu to play the current album as a slideshow.",
     ),
     "Editing photos" to listOf(

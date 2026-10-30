@@ -203,6 +203,7 @@ fun ViewerScreen(
                     loop = settings.loopVideos && !slideshow,
                     controlsVisible = chrome,
                     onToggleControls = { if (slideshow) slideshow = false else chrome = !chrome },
+                    onHideControls = { chrome = false },
                     onRotate = {
                         landscapeLock = (landscapeLock + 1) % 2
                         activity?.requestedOrientation = if (landscapeLock == 1)

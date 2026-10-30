@@ -32,6 +32,8 @@ The same content is available inside the app under **Library → Settings → Us
 - **Details** shows size, resolution, camera settings and location (when present and
   location access was allowed). "Open in maps" hands the coordinates to your map app.
 - Videos: play/pause, ±10 seconds, seek bar, speed 0.25×–2×, mute, rotate to landscape.
+  While playing, the controls fade out after 3 s; tap the video to bring them back (they hide
+  again after 3 s). When paused they stay on until you play again.
 - **Slideshow** from the viewer menu or an album's top bar.
 
 ## Editing photos
