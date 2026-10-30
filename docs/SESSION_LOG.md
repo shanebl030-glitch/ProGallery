@@ -695,3 +695,24 @@ unreliable.
   player; per-clip speed approximated via PlaybackParameters; per-clip volume via player volume on
   boundary; effects-render on a raw SurfaceTexture may need a sized surface (PlayerView path used on
   device). Emulator = software path only, NOT proof of hardware/vendor behaviour.
+
+## 2026-10-30 — Session 30 (cont.) — spike build green; emulator CI unreliable; debug APK for device test
+- Build-only CI green on the fixed commit: ExoPlayerPreviewEngine, debug SpikeActivity/SpikeScreen,
+  playbackVideoEffects, and the instrumented spike test all COMPILE. (One compile error fixed: the
+  engine's onPlayerError constructor param shadowed the listener override -> recursive type-check;
+  renamed to onError.)
+- Emulator CI: 3 attempts on reactivecircus/android-emulator-runner (API 30 google_apis x86_64, KVM).
+  Unreliable, as the repo history already documented: run 1 booted but the test didn't run; run 2
+  booted (logcat) but connectedDebugAndroidTest produced no output (hung); run 3 the emulator didn't
+  boot at all (no logcat). Switched to adb install -g + am instrument (robust mechanism) but the
+  emulator still failed to come up. Conclusion: could NOT get automated runtime results from the free
+  emulator here. Spike workflow kept (gated on a [spike] commit marker) in case a future run succeeds.
+- Delivered the debug prototype instead for REAL device testing: ProGallery-Spike-0.4.21.apk
+  (package com.shaneblackburn.progallery.debug — installs ALONGSIDE production; separate "ProGallery
+  Spike" launcher; no INTERNET; re-signed with the permanent key b00aa037 for update consistency;
+  SHA-256 91c486ad70b8ba32f8a3b18b21722e33165f147a798f0404aad98b18fbd4eb06). Shane tests the engine on
+  his two phones: pick a video -> split into 2 same-source clips + a chosen transition -> continuous
+  playback via the prototype engine, with the actual decoder shown and SW/HW toggle.
+- Honest status: automated empirical results NOT obtained (emulator); correctness/decoder/perf/audio
+  to be confirmed on-device. Production preview/export/main/0.4.15 untouched; no release APK; no version
+  bump.
