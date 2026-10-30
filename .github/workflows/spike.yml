@@ -1,0 +1,90 @@
+name: Spike emulator
+
+# PROTOTYPE spike ONLY (manual). Runs the ExoPlayerPreviewEngineSpikeTest on a KVM-accelerated
+# Android emulator (software decoders — the PREFER_SOFTWARE path) to get real automated signal on
+# continuous playback across same-source clips and the actual decoder selected. It also builds the
+# debug APK (with the debug-only spike screen) so it can be installed on a real phone. Results +
+# logcat + the debug APK are published to the `spike-results` branch.
+#
+# This is NOT proof of hardware/vendor behaviour on physical devices — the emulator only exercises
+# software decode. It does not touch the production build, export, main, or release APKs.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: spike-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build debug APK + androidTest
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+
+      - name: Spike instrumented test on emulator
+        id: emu
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            adb logcat -c || true
+            adb logcat -v time > logcat.txt &
+            ./gradlew :app:connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.class=com.shaneblackburn.progallery.ExoPlayerPreviewEngineSpikeTest \
+              --stacktrace || true
+            sleep 2
+            grep -a "SpikeExo" logcat.txt > spike-log.txt || true
+            echo "=== SpikeExo RESULT lines ==="
+            cat spike-log.txt || echo "(none captured)"
+
+      - name: Collect + publish spike results
+        if: always()
+        run: |
+          mkdir -p out
+          cp logcat.txt spike-log.txt out/ 2>/dev/null || true
+          find app/build/outputs -path '*androidTest-results*' -name '*.xml' -exec cp {} out/ \; 2>/dev/null || true
+          if [ -d app/build/reports/androidTests/connected ]; then cp -r app/build/reports/androidTests/connected out/connected-report; fi
+          find app/build/outputs/apk -name 'app-debug.apk' -exec cp {} out/ \; 2>/dev/null || true
+          {
+            echo "commit=${GITHUB_SHA}"
+            echo "run=${GITHUB_RUN_ID}"
+            echo "emulator_api=30 google_apis x86_64 (software decoders)"
+            echo "test_outcome=${{ steps.emu.outcome }}"
+          } > out/SPIKE_SUMMARY.txt
+          echo "=== SPIKE_SUMMARY ==="; cat out/SPIKE_SUMMARY.txt
+          echo "=== RESULT lines ==="; cat out/spike-log.txt 2>/dev/null || echo "(none)"
+          cd out
+          git init -q -b spike-results
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add -A
+          git commit -qm "Spike results for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" spike-results

@@ -223,6 +223,26 @@ object ProjectComposer {
         }
     }
 
+    /**
+     * Per-clip VIDEO effect chain for the PROTOTYPE ExoPlayer preview engine (continuous playback via
+     * ExoPlayer.setVideoEffects). Same helpers as export, so the look matches, with two necessary
+     * differences for a live playlist player: the speed effect is omitted (ExoPlayer.setVideoEffects
+     * forbids timestamp-altering effects — playback speed is applied via PlaybackParameters instead),
+     * and the transition uses its default frame-relative timing (NOT a fixed-time provider), because a
+     * continuously-playing clip's frames carry the clip's 0-based output time, which is exactly what
+     * [ClipTransitionEffect] expects. Additive: does not change export or the existing preview.
+     */
+    fun playbackVideoEffects(project: VideoProject, index: Int, outW: Int, outH: Int): List<Effect> {
+        val clip = project.clips[index]
+        val edge = project.clipEdge(index)
+        return buildList {
+            geometryEffect(clip)?.let(::add)
+            addAll(colorEffects(clip))
+            add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
+            if (ClipTransitionEffect.needed(edge)) add(ClipTransitionEffect(edge))
+        }
+    }
+
     private fun videoItem(clip: Clip, outW: Int, outH: Int, edge: ClipEdge): EditedMediaItem {
         val mediaItem = clipMediaItem(clip)
 

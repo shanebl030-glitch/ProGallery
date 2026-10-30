@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEBUG-ONLY: adds the ExoPlayer preview-engine spike screen as its own launcher icon
+     ("ProGallery Spike"). Present only in debug builds; never in release. It does not touch the
+     production preview, export, or any production screen. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="com.shaneblackburn.progallery.spike.SpikeActivity"
+            android:exported="true"
+            android:label="ProGallery Spike"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
+            android:theme="@style/Theme.ProGallery">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

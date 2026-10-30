@@ -667,3 +667,31 @@ unreliable.
   frame-for-frame match NOT yet verified on device.
 - Scope preserved: export untouched, no INTERNET, permanent key, credit, versionCode 27 /
   0.4.21-media3, main/0.4.15 untouched. Report API deviations before delivering the signed APK.
+
+## 2026-10-30 — Session 30 (prototype spike) — ExoPlayer + setVideoEffects preview engine
+- Architecture decision: evaluate replacing CompositionPlayer for the LIVE preview. Decisive finding
+  from Transitions.kt: ProGallery's transitions are ALL per-clip "through-a-state" effects (fade/blur/
+  zoom/wipe/push to-or-from black/neutral) — NOT true cross-clip blends. Export produces the same
+  (single sequence + per-clip ClipTransitionEffect). CROSS_DISSOLVE exists but crossClip=true and is
+  excluded from the picker. So "genuine cross-clip transitions" is a separate future feature; Shane
+  chose Option 1: faithfully play today's per-clip transitions. True cross-clip would need a two-clip
+  overlap compositor in BOTH preview and export (or the pre-rendered proxy).
+- Verified APIs in 1.11.1 source: ExoPlayer.setVideoEffects (default MediaCodecVideoRenderer only; no
+  timestamp-altering effects (so speed via PlaybackParameters, not SpeedChangeEffect); call before
+  prepare, swappable during playback); DefaultRenderersFactory.setMediaCodecSelector(PREFER_SOFTWARE)
+  (public); AnalyticsListener.onVideoDecoderInitialized gives the real decoder name; ExoPlayer honors
+  ClippingConfiguration (ClippingMediaSource) for same-source clips; enableDecoderFallback only retries
+  on decoder INIT failure, not decode-time CodecException (so it would NOT fix the 0x80000000 decode
+  stall — software decode is the right lever).
+- PROTOTYPE (not wired to production): ExoPlayerPreviewEngine (playlist + PREFER_SOFTWARE + per-clip
+  setVideoEffects swap at onMediaItemTransition + per-clip volume/speed + decoder-name capture);
+  ProjectComposer.playbackVideoEffects (additive; reuses export helpers minus speed; default transition
+  timing); debug-only SpikeActivity/SpikeScreen (src/debug, separate "ProGallery Spike" launcher) to
+  test on real phones; instrumented ExoPlayerPreviewEngineSpikeTest (continuity across same-source
+  boundary, actual decoder, seek, effects-reaches-ready); spike.yml emulator workflow (free, public
+  repo) publishing results+logcat+debug APK to spike-results branch.
+- Production preview/PreviewController/export/main/0.4.15 UNTOUCHED. No version bump, no release APK.
+- Known prototype limits to confirm: background music (parallel track) not mixed by a single playlist
+  player; per-clip speed approximated via PlaybackParameters; per-clip volume via player volume on
+  boundary; effects-render on a raw SurfaceTexture may need a sized surface (PlayerView path used on
+  device). Emulator = software path only, NOT proof of hardware/vendor behaviour.
