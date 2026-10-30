@@ -9,8 +9,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.transformer.CompositionPlayer
 import androidx.media3.ui.PlayerView
 import com.shaneblackburn.progallery.CrashReporter
@@ -66,6 +68,13 @@ class PreviewController(
     // (single decoder, reused across clips) and keep it off for the rest of the session. This both
     // works around the limit AND tests whether concurrent decoding was really the cause.
     private var videoPrewarmingDisabled = false
+    // Once the simplified (raw) player hits a decode error this device can't recover from with the
+    // hardware decoder — typically the SECOND clip of a same-source cut, reached mid-playback at a
+    // transition — we rebuild it ONCE with a software decoder (which has no per-codec instance limit and
+    // decodes these clips reliably) and keep it off hardware for the session, so continuous playback
+    // runs through the whole timeline instead of stopping. Sticky: this path is the degraded fallback
+    // anyway, and a device that needs software once needs it for the rest of the session.
+    private var simplePlayerSoftware = false
     // Diagnostic surfaced in the fallback "Details" text so the prewarming-retry outcome is visible
     // on the phone WITHOUT logcat. Reflects the attempt that actually fell back:
     //   NO-API             reflection unavailable in this Media3 build (no retry possible)
@@ -217,7 +226,14 @@ class PreviewController(
         }
         if (project.clips.isEmpty()) { onError(cause?.let { diagnose(project, it) }); return false }
         return try {
-            val exo = ExoPlayer.Builder(context).build()
+            // On a device proven unable to hardware-decode a clip in this timeline, build the raw player
+            // with a software decoder so continuous playback runs through every clip (incl. the 2nd clip
+            // of a same-source cut at a transition). Hardware stays the default fast path otherwise.
+            val exo = if (simplePlayerSoftware) {
+                ExoPlayer.Builder(context, DefaultRenderersFactory(context).setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)).build()
+            } else {
+                ExoPlayer.Builder(context).build()
+            }
             // Frame-accurate seeking so scrubbing and frame-step land on the exact frame the
             // playhead points at (the default snaps to the nearest sync sample).
             exo.setSeekParameters(SeekParameters.EXACT)
@@ -225,7 +241,23 @@ class PreviewController(
                 override fun onIsPlayingChanged(isPlaying: Boolean) = onPlayingChanged(isPlaying)
                 override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) onReady() }
                 override fun onPlayerError(error: PlaybackException) {
-                    onError("Can't preview this video on this device (${error.errorCodeName}). It will still be included in the export.")
+                    if (player !== exo) return
+                    if (!simplePlayerSoftware && isDecodeError(error)) {
+                        // Hardware decoder failed mid-playback (e.g. the 2nd same-source clip at a
+                        // transition). Rebuild ONCE with software decoding and resume in place so playback
+                        // continues. simplePlayerSoftware makes this strictly one switch (no loop).
+                        simplePlayerSoftware = true
+                        val resumeAt = currentPositionMs
+                        val resumePlaying = exo.playWhenReady
+                        android.util.Log.w("PreviewController",
+                            "simplified playback decode error ${error.errorCodeName}; retrying with software decoding", error)
+                        mainHandler.post {
+                            if (player !== exo) return@post
+                            startSimplePlayer(project, resumeAt, resumePlaying, cause)
+                        }
+                    } else {
+                        onError("Can't preview this video on this device (${error.errorCodeName}). It will still be included in the export.")
+                    }
                 }
             })
             project.clips.forEach { clip -> exo.addMediaItem(simpleMediaItem(clip)) }

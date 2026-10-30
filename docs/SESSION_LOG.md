@@ -733,3 +733,15 @@ unreliable.
   on a decode error in the simplified player, rebuild ONCE with DefaultRenderersFactory
   .setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE) and resume from the current position, so
   raw playback continues through the whole timeline. Preview-only; export untouched.
+
+## 2026-10-30 — Session 31 (cont.) — v0.4.22-media3: continuous playback through transitions
+- Implemented the approved fix in PreviewController (built-in editor, preview only). On a decode error
+  in the simplified (raw) ExoPlayer, rebuild ONCE with DefaultRenderersFactory.setMediaCodecSelector(
+  MediaCodecSelector.PREFER_SOFTWARE) and resume at the current position with the same play state, so
+  continuous playback runs through the 2nd same-source clip at a transition instead of stopping. Sticky
+  flag simplePlayerSoftware (one switch/session, no loop); hardware stays the default fast path. Reuses
+  the existing isDecodeError/DECODE_RETRY_CODES. Export + composed-frame preview untouched.
+- versionCode 28 / 0.4.22-media3. Scope preserved: no INTERNET, permanent key, credit, main/0.4.15
+  untouched. HONEST: the simplified player is the most likely cause of the stop (not 100% proven w/o
+  device logs); software decode is the proven-reliable lever (same as FrameExtractor). Needs Shane's
+  on-device confirmation that playback now runs through transitions; perf of software 1080p to watch.

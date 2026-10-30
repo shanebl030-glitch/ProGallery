@@ -2,6 +2,36 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.22-media3] — 2026-10-30 — continuous playback no longer stops at a transition — DEVICE-TEST BUILD
+
+Fixes the remaining built-in-editor issue: during continuous playback, the preview stopped when it
+reached a transition. Branch build; not on `main`.
+
+### Cause
+When the full-effects CompositionPlayer can't run a composition (a same-source multi-clip cut with a
+transition), the preview uses the simplified (raw) player — a plain ExoPlayer with the device's
+hardware decoder and no software fallback. Reaching the second same-source clip at the cut, that
+decoder throws a decode-time `CodecException` (`ERROR_CODE_DECODING_FAILED`), and with no recovery the
+player halts. (ExoPlayer's `enableDecoderFallback` only retries on decoder *init* failure, not a
+decode-time exception, so it can't help here.)
+
+### Fix (preview only)
+On a decode error in the simplified player, it now rebuilds **once** with a **software** decoder
+(`DefaultRenderersFactory` + `MediaCodecSelector.PREFER_SOFTWARE`) and resumes from the current
+position, so playback continues through the whole timeline (raw footage during playback; effects still
+accurate when paused/scrubbing via the composed-frame preview, and correct on export). Hardware stays
+the default fast path; software engages only after a failure, one switch per session (no loops).
+Export (Transformer) and the composed-frame preview are untouched.
+
+### Also
+- Removed the scrapped ExoPlayer preview-engine prototype (spike): it is not part of the product.
+
+### Still outstanding / to confirm on device
+- That this makes playback run through transitions on your phones (the simplified player was the most
+  likely cause; if a different cause remains, this is the right first fix but may not be the whole story).
+- Software 1080p playback is heavier than hardware — should be smooth on the Fold5; weaker devices may
+  drop a few frames. Raw preview only; export is unaffected.
+
 ## [0.4.21-media3] — 2026-10-30 — Phase 1: accurate on-demand composed preview (transitions) — DEVICE-TEST BUILD
 
 Fixes the transition PREVIEW properly (not by hiding the banner): on devices where the live
