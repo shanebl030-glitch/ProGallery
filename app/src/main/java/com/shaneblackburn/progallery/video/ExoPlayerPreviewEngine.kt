@@ -49,7 +49,7 @@ class ExoPlayerPreviewEngine(
     private val context: Context,
     private val preferSoftware: Boolean = true,
     private val onDecoderName: (String) -> Unit = {},
-    private val onPlayerError: (PlaybackException) -> Unit = {},
+    private val onError: (PlaybackException) -> Unit = {},
 ) {
     var player: ExoPlayer? = null
         private set
@@ -92,7 +92,7 @@ class ExoPlayerPreviewEngine(
                 if (withEffects) applyClipEffects(p.currentMediaItemIndex)
                 applyClipAudio(p.currentMediaItemIndex)
             }
-            override fun onPlayerError(error: PlaybackException) = onPlayerError(error)
+            override fun onPlayerError(error: PlaybackException) = onError(error)
         })
 
         project.clips.forEach { p.addMediaItem(mediaItemFor(it)) }

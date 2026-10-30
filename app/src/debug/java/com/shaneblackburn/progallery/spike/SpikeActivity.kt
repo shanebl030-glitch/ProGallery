@@ -91,7 +91,7 @@ private fun SpikeScreen() {
             eng = ExoPlayerPreviewEngine(
                 context, preferSoftware = preferSoftware,
                 onDecoderName = { decoderName = it },
-                onPlayerError = { status = "Player error: ${it.errorCodeName}" },
+                onError = { status = "Player error: ${it.errorCodeName}" },
             )
             eng.load(twoClipProject(uri, m, transition), 0L, withEffects = true)
             engine = eng

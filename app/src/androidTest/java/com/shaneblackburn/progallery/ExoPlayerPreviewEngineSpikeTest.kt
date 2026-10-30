@@ -101,7 +101,7 @@ class ExoPlayerPreviewEngineSpikeTest {
         val eng = ExoPlayerPreviewEngine(
             ctx, preferSoftware = true,
             onDecoderName = { Log.i(TAG, "video decoder = $it") },
-            onPlayerError = { error = it; Log.e(TAG, "player error", it) },
+            onError = { error = it; Log.e(TAG, "player error", it) },
         )
         engine = eng
         onMain {
@@ -154,7 +154,7 @@ class ExoPlayerPreviewEngineSpikeTest {
         val eng = ExoPlayerPreviewEngine(
             ctx, preferSoftware = true,
             onDecoderName = { Log.i(TAG, "fx decoder=$it") },
-            onPlayerError = { error = it; Log.e(TAG, "fx player error", it) },
+            onError = { error = it; Log.e(TAG, "fx player error", it) },
         )
         engine = eng
         onMain { eng.load(project, 0L, withEffects = true); eng.setSurface(makeSurface()); eng.play() }
