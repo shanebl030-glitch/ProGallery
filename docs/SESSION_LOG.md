@@ -773,3 +773,54 @@ unreliable.
 - HONEST: recovery trial + decoder behaviour are device-verified by Shane; CI verifies compile + unit
   tests (emulator unreliable). Edge: a device that crashed once then gracefully falls back (no crash,
   no full success) keeps trialing and isn't auto-cleared -- per the stricter rule; user can clear manually.
+
+## 2026-10-31 — Session 33 (v0.4.24-media3) — Ripple backwards-scrub fix + exported videos in Today
+- Two approved, isolated fixes. Fold5 full-effects playback, the MediaTek software fallback and the
+  export pipeline are all untouched; changes are confined to the composed-frame preview and the
+  gallery's day-grouping. versionCode 30 / 0.4.24-media3. main/0.4.15 untouched; permanent key; no INTERNET.
+
+- Fix 1 — Ripple (and all) transition backwards-scrub freeze.
+  * Refined diagnosis before coding: the ripple SHADER cannot flip a frame (displacement capped at
+    MAX_RIPPLE=0.04). The "almost upside down, stuck until the next transition" symptom is a FROZEN
+    composed frame: the transition was baked into FrameExtractor's effect list, and FrameExtractor's
+    internal frame is keyed on source position, so a reused/cached frame held a stale transition while
+    scrubbing. It cleared at the next clip boundary because that re-prepares the extractor.
+  * Proper fix (no timestamp nudging): extractor now renders the TRANSITION-FREE base frame only
+    (ProjectComposer.previewBaseEffects = geometry + colour + Presentation) — a pure function of source
+    position, so the cache/seek is always correct. The transition is applied on the CPU every render,
+    from the exact playhead output-time (clipEdge.uniformsAt(spec.inClipTimelineMs)), via the shared
+    TransitionCpu reference (same maths as the export shader) → preview/export parity, and nothing
+    position-dependent is left in the cache to go stale.
+  * New TransitionBitmap (app): applies TransitionUniforms to the base bitmap with bilinear sampling,
+    reusing TransitionCpu.render. Skipped entirely when uniforms are identity (outside transition
+    windows → full-speed scrub). Work capped to 540px short side then scaled back, so the 49-tap blur
+    transitions stay responsive on a paused/scrub still; result scaled back to the base size.
+    Seed derived from source position so glitch/shake/ripple phase varies smoothly (never freezes).
+  * ClipTransitionEffect (GPU, export/playback path) left UNTOUCHED — its fixedTimeMs provider is just
+    no longer used by the preview. CompositionPlayer playback and Transformer export unchanged.
+
+- Fix 2 — exported videos now appear under Today (Shane: KEEP the original capture date).
+  * Export (VideoExportManager) UNCHANGED: still sets no date columns, so MediaStore stamps DATE_ADDED
+    = now on insert while DATE_TAKEN keeps the original footage's capture date. Source files/metadata
+    never touched.
+  * New GalleryDate.of(item, today, zone) (core, pure): returns dateAdded when an item was added today
+    AND its capture date is older than today; otherwise effectiveDate. So freshly added/exported media
+    surfaces under Today (at the top, by add time) and settles back to its capture date the next day.
+  * Applied via SortSpec.comparator(today,zone)/dateOf(item,today,zone) and a new applyFilterAndSort
+    overload — ONLY the DATE_TAKEN ordering is boosted; DATE_ADDED/DATE_MODIFIED sorts and existing
+    media's chronology are unchanged. GalleryViewModel threads LocalDate.now()/systemDefault() into the
+    timeline sort, album sort, smart-collection sort and group() so grouping and sort stay in lockstep.
+  * No duplicates (one galleryDate → one section); file stays in library/Albums/Videos as before.
+
+- Tests: +12 core unit tests (113 total, all pass locally via tools/core-test.sh):
+  * GalleryDateTest (8): boost today+older-capture; no-boost same-day/added-before-today/no-add-date/
+    future-capture; zone-correct local date (UTC+13 vs UTC); DATE_ADDED/DATE_MODIFIED unaffected;
+    integration — exported video at top of Today, older media unchanged, exactly one entry, settles next day.
+  * TransitionScrubTest (4): ripple deterministic forwards==backwards per position; varies monotonically
+    (not frozen); different positions render different pixels; SPIN/ZOOM/SHAKE/GLITCH/PIXELATE also vary.
+- HONEST / device-check items: core logic + preview/export parity are unit-verified on the JVM. The
+  app module (GalleryViewModel, ProjectComposer, FramePreviewRenderer, TransitionBitmap) compiles +
+  builds in CI (no Android SDK in the workspace). Needs Shane's on-device confirmation: (1) ripple
+  backwards-scrub now shows the correct frame, and the same for other transitions; (2) scrub
+  responsiveness on blur-heavy transitions (Blur/Cross zoom) given the CPU render; (3) exported video
+  shows at the top of Today with its original capture date in Details.

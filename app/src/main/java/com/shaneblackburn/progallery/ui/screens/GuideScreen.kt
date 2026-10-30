@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 private val GUIDE: List<Pair<String, List<String>>> = listOf(
     "Browsing" to listOf(
         "Photos shows everything, newest first, grouped by day. Tap the sliders icon to change sort order, grouping and grid size.",
+        "Anything added today — including a video you just exported — appears at the top of Today, even when it keeps an older capture date (an edited video keeps its original footage's date in Details). The next day it moves back to sit under its own capture date.",
         "Pinch the grid with two fingers to show more or fewer photos per row.",
         "Drag the scroll handle on the right edge to jump quickly through years of photos.",
         "Albums lists every folder that contains photos or videos. Long-press an album to pin it to the top or hide it.",
@@ -53,7 +54,7 @@ private val GUIDE: List<Pair<String, List<String>>> = listOf(
     ),
     "Editing videos" to listOf(
         "Edit one video: open it and tap the pencil. Make a movie from several photos and videos: Library → Video projects → New video, then tap items in the order you want them.",
-        "Video projects save automatically. Reopen, rename, duplicate or delete them in Library → Video projects. Your photos and videos are never changed; exports are saved as new videos.",
+        "Video projects save automatically. Reopen, rename, duplicate or delete them in Library → Video projects. Your photos and videos are never changed; exports are saved as new videos, which show up at the top of Today the day you make them.",
         "If you edited a single video and leave, ProGallery asks whether to keep it as a project.",
         "Scroll the timeline to move the playhead. Tap a clip to select it, then drag its edges to trim. Long-press a clip and drag it to reorder. Back deselects.",
         "Clip tools: split at the playhead, speed (0.25× to 4×, voice pitch kept), volume or mute, rotate, flip, colour, filters with strength, and move earlier or later. Photos have a duration slider instead of trimming and speed.",

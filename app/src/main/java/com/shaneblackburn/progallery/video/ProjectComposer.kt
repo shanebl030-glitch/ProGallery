@@ -199,27 +199,23 @@ object ProjectComposer {
 
     /**
      * The per-clip VIDEO effect chain for the on-demand composed preview (Media3 FrameExtractor),
-     * built from the SAME helpers as export so the previewed frame is produced by the same shaders.
-     * Differs from export only in ways that don't change a still frame's pixels: the speed effect is
-     * omitted (speed changes playback rate, not the frame at a given position — the caller seeks to the
-     * exact source frame), and the transition is evaluated at [transitionTimeMs] (the known playhead
-     * output-time) instead of inferring time from the single extracted frame. [outW]x[outH] is the
-     * preview render size (typically a downscaled copy of the export size, same aspect/letterboxing).
+     * built from the SAME helpers as export so the previewed frame is produced by the same shaders —
+     * but WITHOUT the transition. The base frame (colour grade, filter, geometry, letterboxing) is a
+     * pure function of the source position, so FrameExtractor can seek and cache it reliably. The
+     * transition is applied afterwards by [FramePreviewRenderer] from the EXACT playhead position via
+     * the CPU reference ([com.shaneblackburn.progallery.core.video.TransitionCpu], the same maths the
+     * export shader runs); keeping it out of the cached extractor is what stops a stale cached frame
+     * from freezing the transition while scrubbing (backwards especially). Differs from export only in
+     * ways that don't change a still frame's pixels: the speed effect is omitted (speed changes the
+     * playback rate, not the frame at a given position — the caller seeks to the exact source frame).
+     * [outW]x[outH] is the preview render size (a downscaled copy of the export size, same aspect).
      */
-    fun previewVideoEffects(
-        project: VideoProject,
-        index: Int,
-        outW: Int,
-        outH: Int,
-        transitionTimeMs: () -> Long,
-    ): List<Effect> {
+    fun previewBaseEffects(project: VideoProject, index: Int, outW: Int, outH: Int): List<Effect> {
         val clip = project.clips[index]
-        val edge = project.clipEdge(index)
         return buildList {
             geometryEffect(clip)?.let(::add)
             addAll(colorEffects(clip))
             add(Presentation.createForWidthAndHeight(outW, outH, Presentation.LAYOUT_SCALE_TO_FIT))
-            if (ClipTransitionEffect.needed(edge)) add(ClipTransitionEffect(edge, fixedTimeMs = transitionTimeMs))
         }
     }
 

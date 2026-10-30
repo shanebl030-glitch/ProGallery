@@ -2,6 +2,38 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.24-media3] — 2026-10-31 — Ripple backwards-scrub fix + exported videos in Today — DEVICE-TEST BUILD
+
+Two targeted fixes. Branch build; not on `main`. Fold5 full-effects playback, the MediaTek
+software-decode fallback and the export pipeline are all untouched; both changes are isolated to the
+composed-frame preview and the gallery's day-grouping.
+
+### Ripple (and other) transition — backwards-scrubbing preview fix
+Scrubbing backwards over a transition could leave the paused preview stuck on a stale, distorted frame
+(reported on Ripple) until the next transition was passed.
+- Root cause: the composed preview baked the transition into Media3's `FrameExtractor`, whose internal
+  frame is keyed on the source position, so a reused/cached frame could freeze the transition while
+  scrubbing (backwards in particular).
+- Fix: the extractor now renders only the clip's **transition-free base frame** (colour, filter,
+  geometry, letterboxing) — a pure function of the source position, so it caches and seeks correctly.
+  The transition is then applied **on the CPU, from the exact playhead position, every render**, using
+  the shared `TransitionCpu` reference (the same maths the export shader runs). There is no
+  position-dependent transition left inside the cached extractor to go stale.
+- No timestamp nudging; accurate frame extraction and all existing transition behaviour are preserved.
+  Backwards and forwards scrubbing now show the correct frame at every position. The CPU render is
+  capped in resolution and skipped entirely outside transition windows to stay responsive.
+
+### Exported videos now appear in Today
+An edited/exported video kept its original footage's capture date (as intended) and so grouped under
+that old date instead of showing up as newly added.
+- Export is **unchanged** — original capture dates and source files/metadata are never modified.
+- The gallery's day-grouping gained a "recently added" rule (`GalleryDate`): an item **added today**
+  whose capture date is **older** is surfaced under **Today** using its add time, at the top of the
+  section. The next day it settles back to its original capture-date position.
+- Applies only to the capture-date ("Date taken") ordering, so Date added / Date modified sorts and the
+  normal chronology of existing media are unaffected; each item still appears exactly once (no
+  duplicates), and the file stays visible in the normal library, Albums and Videos sections.
+
 ## [0.4.23-media3] — 2026-10-30 — Safe-mode auto-recovery + MediaTek software-decode fallback — DEVICE-TEST BUILD
 
 Two built-in-editor improvements. Branch build; not on `main`. Export, transitions, effects and the

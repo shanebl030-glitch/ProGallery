@@ -9,6 +9,9 @@ The same content is available inside the app under **Library → Settings → Us
 - **Photos** shows everything, newest first, grouped by day. The sliders icon changes
   sort order (date taken/modified/added, name, size, type, duration, resolution),
   grouping (day/month/year/none) and grid size.
+- Anything **added today** — including a video you just exported — appears at the top of
+  **Today**, even when it keeps an older capture date (an edited video keeps its original
+  footage's date in Details). The next day it moves back under its own capture date.
 - **Pinch** the grid with two fingers for more or fewer photos per row.
 - Drag the **scroll handle** on the right edge to jump through your library.
 - **Albums** lists every folder containing photos or videos. Long-press an album to pin
@@ -95,7 +98,8 @@ The same content is available inside the app under **Library → Settings → Us
 - **Export:** resolution (original down to 480p), frame rate (only lowers), quality,
   H.264 or HEVC, with an estimated file size. Export continues in the background with a
   progress notification and a Cancel button. Exports are saved as new videos
-  (`name_edited.mp4`); originals are never overwritten.
+  (`name_edited.mp4`); originals are never overwritten. A freshly exported video shows up at
+  the top of **Today** the day you make it, while keeping its original capture date in Details.
 
 ## Searching
 - Words match file and album names: `holiday`, `"beach day"`.

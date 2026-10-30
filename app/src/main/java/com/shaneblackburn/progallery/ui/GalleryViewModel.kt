@@ -128,7 +128,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val timeline: StateFlow<List<MediaItem>> = combine(allItems, hiddenFilter, settings.map { it.sort }) { all, f, sort ->
-        all.applyFilterAndSort(f, sort)
+        all.applyFilterAndSort(f, sort, LocalDate.now(), ZoneId.systemDefault())
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val timelineEntries: StateFlow<List<GridEntry>> = combine(
@@ -182,12 +182,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         MediaSource.Trash -> trash
         is MediaSource.AlbumSrc -> combine(allItems, settings) { all, s ->
             // An album is always viewable from inside, even if hidden from the main lists.
-            all.applyFilterAndSort(FilterSpec(includeHiddenBuckets = true), s.sort).filter { it.bucketId == source.bucketId }
+            all.applyFilterAndSort(FilterSpec(includeHiddenBuckets = true), s.sort, LocalDate.now(), ZoneId.systemDefault())
+                .filter { it.bucketId == source.bucketId }
         }.flowOn(Dispatchers.Default)
         is MediaSource.Smart -> combine(allItems, hiddenFilter, settings) { all, f, s ->
             val visible = all.filter { f.matches(it) }
             val picked = SmartCollections.select(source.collection, visible, System.currentTimeMillis(), s.recent.ids)
-            if (SmartCollections.hasIntrinsicOrder(source.collection)) picked else picked.sortedWith(s.sort.comparator())
+            if (SmartCollections.hasIntrinsicOrder(source.collection)) picked
+            else picked.sortedWith(s.sort.comparator(LocalDate.now(), ZoneId.systemDefault()))
         }.flowOn(Dispatchers.Default)
     }
 
@@ -204,7 +206,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private fun group(items: List<MediaItem>, groupBy: GroupBy, sort: SortSpec): List<GridEntry> {
         val effective = if (sort.isDateBased) groupBy else GroupBy.NONE
-        return DateGrouper(ZoneId.systemDefault(), LocalDate.now()).group(items, effective, sort::dateOf)
+        val today = LocalDate.now()
+        val zone = ZoneId.systemDefault()
+        // Use the same boosted date as the sort (see GalleryDate) so day headers match the order:
+        // media added today with an older capture date groups under "Today", then settles back.
+        return DateGrouper(zone, today).group(items, effective) { sort.dateOf(it, today, zone) }
     }
 
     fun albumName(bucketId: Long): String =

@@ -28,7 +28,15 @@ import kotlin.math.roundToInt
  * hardware-only, no-fallback pipeline can't decode the composition (e.g. a multi-clip cut of one source
  * with a transition, which fails on the MediaTek AVC decoder). It is preview-only: the export pipeline
  * is untouched, and the frame is built from the SAME per-clip effects as export ([ProjectComposer
- * .previewVideoEffects]) so it reflects what will be exported.
+ * .previewBaseEffects] plus the shared [com.shaneblackburn.progallery.core.video.TransitionCpu] maths)
+ * so it reflects what will be exported.
+ *
+ * Transition handling (why it is split out of the extractor): the extractor renders only the clip's
+ * BASE frame — colour, filter, geometry, letterboxing — which is a pure function of the source
+ * position, so FrameExtractor can seek and cache it correctly. The transition is then applied on the
+ * CPU ([TransitionBitmap]) from the EXACT playhead output-time, every render. This removes the
+ * backwards-scrub freeze: there is no position-dependent transition inside the cached extractor that a
+ * stale cached frame could hold onto.
  *
  * Scope and rules:
  * - Video clips only. [FrameExtractor] requires a video track, so image clips return null and the
@@ -46,10 +54,6 @@ class FramePreviewRenderer(private val context: Context) {
 
     private var extractor: FrameExtractor? = null
     private var extractorSignature: String? = null
-    // Clip-local OUTPUT time (ms) to evaluate the transition at. Written before each render, read on
-    // the GL thread by ClipTransitionEffect, so one extractor serves successive scrub positions
-    // without being rebuilt (only the seek position and this value change while scrubbing a clip).
-    @Volatile private var transitionTimeMs: Long = 0L
 
     /**
      * The composed frame at whole-timeline [timelineMs], downscaled so its short side is about
@@ -64,27 +68,40 @@ class FramePreviewRenderer(private val context: Context) {
             val spec = project.framePreviewSpec(timelineMs)
             val clip = clips.getOrNull(spec.clipIndex) ?: return@withContext null
             if (clip.isImage) return@withContext null // Phase 1: video clips only.
-            transitionTimeMs = spec.inClipTimelineMs
 
             val (outW, outH) = previewSize(project, maxShortSidePx)
             // Rebuild only when the source range or the clip's effect parameters change. Equal MediaItems
-            // let Media3 reuse the decoder, and the transition TIME is excluded on purpose (the provider
-            // supplies it per frame), so scrubbing within a clip never rebuilds or re-prepares.
-            val signature = "$outW:$outH:${clip.hashCode()}:${project.clipEdge(spec.clipIndex).hashCode()}"
+            // let Media3 reuse the decoder. The extractor renders the TRANSITION-FREE base frame, which
+            // depends only on the source position, so scrubbing within a clip never rebuilds or
+            // re-prepares and the cached frame is always correct for that position.
+            val signature = "$outW:$outH:${clip.hashCode()}"
             if (extractor == null || extractorSignature != signature) {
                 runCatching { extractor?.close() }
                 extractor = runCatching {
                     FrameExtractor.Builder(context, ProjectComposer.clipMediaItem(clip))
-                        .setEffects(
-                            ProjectComposer.previewVideoEffects(project, spec.clipIndex, outW, outH) { transitionTimeMs },
-                        )
+                        .setEffects(ProjectComposer.previewBaseEffects(project, spec.clipIndex, outW, outH))
                         .build()
                 }.getOrNull()
                 extractorSignature = if (extractor != null) signature else null
             }
             val ex = extractor ?: return@withContext null
-            runCatching { awaitFrame(ex, spec.sourceOffsetMs) }.getOrNull()
+            val base = runCatching { awaitFrame(ex, spec.sourceOffsetMs) }.getOrNull() ?: return@withContext null
+
+            // Apply the transition for the EXACT playhead output-time on the CPU. Evaluating it here,
+            // every render, means a cached base frame can never freeze the transition during a
+            // (backwards) scrub. Identity windows return the base untouched (no per-pixel work).
+            val uniforms = project.clipEdge(spec.clipIndex).uniformsAt(spec.inClipTimelineMs)
+            if (uniforms.isIdentity) return@withContext base
+            runCatching { TransitionBitmap.apply(base, uniforms, seedFor(spec.sourceOffsetMs)) }
+                .getOrDefault(base)
         }
+
+    /**
+     * Animation seed for glitch/shake/ripple, derived from the source position so it varies smoothly
+     * as the playhead moves (never freezes). Matches the GPU shader's seed formula
+     * (presentationTimeUs / 60000 % 997) with the extracted frame's source offset as the position.
+     */
+    private fun seedFor(sourceOffsetMs: Long): Float = ((sourceOffsetMs / 60L) % 997L).toFloat()
 
     private suspend fun awaitFrame(ex: FrameExtractor, positionMs: Long): Bitmap =
         suspendCancellableCoroutine { cont ->

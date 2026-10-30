@@ -3,6 +3,8 @@ package com.shaneblackburn.progallery.core.query
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.core.model.MediaType
 import com.shaneblackburn.progallery.core.model.NaturalOrder
+import java.time.LocalDate
+import java.time.ZoneId
 
 enum class SortField { DATE_TAKEN, DATE_MODIFIED, DATE_ADDED, NAME, SIZE, TYPE, DURATION, RESOLUTION }
 
@@ -34,6 +36,26 @@ data class SortSpec(val field: SortField = SortField.DATE_TAKEN, val ascending: 
         SortField.DATE_ADDED -> item.dateAdded
         else -> item.effectiveDate
     }
+
+    /**
+     * Comparator that applies the "recently added" boost ([GalleryDate]) to the capture-date
+     * ("Date taken") ordering, so media added today with an older capture date sorts into today.
+     * All other sort fields are unaffected and fall back to [comparator].
+     */
+    fun comparator(today: LocalDate, zone: ZoneId): Comparator<MediaItem> {
+        if (field != SortField.DATE_TAKEN) return comparator()
+        val base: Comparator<MediaItem> = compareBy { GalleryDate.of(it, today, zone) }
+        val directed = if (ascending) base else base.reversed()
+        return directed.thenComparator { a, b -> if (ascending) a.id.compareTo(b.id) else b.id.compareTo(a.id) }
+    }
+
+    /**
+     * Grouping timestamp matching [comparator] (same [today]/[zone]): the capture-date ordering is
+     * boosted via [GalleryDate]; Date added / Date modified are returned unchanged. Using this for
+     * day-grouping keeps section headers in lockstep with the sort order.
+     */
+    fun dateOf(item: MediaItem, today: LocalDate, zone: ZoneId): Long =
+        if (field == SortField.DATE_TAKEN) GalleryDate.of(item, today, zone) else dateOf(item)
 }
 
 data class FilterSpec(
@@ -64,3 +86,10 @@ data class FilterSpec(
 
 fun List<MediaItem>.applyFilterAndSort(filter: FilterSpec, sort: SortSpec): List<MediaItem> =
     asSequence().filter(filter::matches).sortedWith(sort.comparator()).toList()
+
+/**
+ * As [applyFilterAndSort], but the capture-date ordering surfaces media added today under today
+ * (see [GalleryDate]). Other sort fields behave identically to the plain overload.
+ */
+fun List<MediaItem>.applyFilterAndSort(filter: FilterSpec, sort: SortSpec, today: LocalDate, zone: ZoneId): List<MediaItem> =
+    asSequence().filter(filter::matches).sortedWith(sort.comparator(today, zone)).toList()
