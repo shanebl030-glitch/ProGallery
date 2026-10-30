@@ -716,3 +716,20 @@ unreliable.
 - Honest status: automated empirical results NOT obtained (emulator); correctness/decoder/perf/audio
   to be confirmed on-device. Production preview/export/main/0.4.15 untouched; no release APK; no version
   bump.
+
+## 2026-10-30 — Session 31 — spike scrapped by Shane's decision; keep the built-in editor
+- Shane: "Scrap that. I prefer the built-in editor in ProGallery." Decision: do NOT replace the
+  CompositionPlayer-based preview with an ExoPlayer engine. Removed ALL spike prototype code from
+  media3-upgrade: ExoPlayerPreviewEngine, debug SpikeActivity/screen + src/debug manifest,
+  ExoPlayerPreviewEngineSpikeTest, .github/workflows/spike.yml, and ProjectComposer.playbackVideoEffects.
+  Nothing in production referenced them, so removal is clean.
+- KEPT (part of the built-in editor Shane likes): Phase 1 composed-frame preview (FrameExtractor) for
+  accurate paused/scrubbing transitions — confirmed working on his phones; media3-inspector-frame dep;
+  ClipTransitionEffect fixed-time provider; VideoProject.framePreviewSpec; ProjectComposer
+  .previewVideoEffects; VideoEditorScreen composed-overlay wiring.
+- Outstanding for the built-in editor: continuous playback still STOPS at a transition (the simplified
+  raw ExoPlayer can't hardware-decode the 2nd same-source clip; enableDecoderFallback only covers INIT
+  failures, not the decode-time CodecException). Proposed fix (not yet built, awaiting Shane's go):
+  on a decode error in the simplified player, rebuild ONCE with DefaultRenderersFactory
+  .setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE) and resume from the current position, so
+  raw playback continues through the whole timeline. Preview-only; export untouched.
