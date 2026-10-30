@@ -209,6 +209,26 @@ data class VideoProject(
     fun hasAnyTransition(): Boolean = fadeIn != null || fadeOut != null ||
         transitions.any { it.isActive && !it.type.crossClip }
 
+    /**
+     * Whether the paused/scrub preview at whole-timeline [timelineMs] must be drawn from the composed
+     * CPU frame instead of the live GPU player, even on a device that can run full effects.
+     *
+     * True only when the clip under the playhead is a VIDEO clip that carries a transition on either
+     * edge. The GPU `CompositionPlayer` evaluates a clip's transition from frame-relative timing that
+     * is only correct for ordered playback; under random-access scrubbing it can render a transition
+     * outside its window (e.g. an incoming transition flooding the whole clip). The composed frame
+     * computes each transition from the exact playhead position ([framePreviewSpec]/[clipEdge]), so it
+     * is always correct. Transition-free clips (and image clips, which the composed path doesn't cover
+     * yet) return false and keep the full-resolution GPU preview while paused. Pure and unit-tested.
+     */
+    fun usesComposedTransitionPreview(timelineMs: Long): Boolean {
+        if (clips.isEmpty()) return false
+        val spec = framePreviewSpec(timelineMs)
+        val clip = clips.getOrNull(spec.clipIndex) ?: return false
+        if (clip.isImage) return false
+        return clipEdge(spec.clipIndex).isActive
+    }
+
     /** Timeline milliseconds for one displayed frame at [timelineMs] (for frame-stepping). */
     fun frameDurationMsAt(timelineMs: Long): Long {
         val clip = locate(timelineMs)?.let { clips[it.clipIndex] } ?: clips.firstOrNull() ?: return 33L

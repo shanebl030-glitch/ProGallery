@@ -77,6 +77,98 @@ class TransitionScrubTest {
         }
     }
 
+    // ---- Multiple transitions at separate timeline positions (v0.4.25 fix) ----
+
+    // Three 4 s clips: Ripple between clips 1&2 (cut at 4000 ms), Blur between 2&3 (cut at 8000 ms),
+    // each transition 1000 ms (500 ms on each side of its cut). The middle clip is clip index 1.
+    private fun twoTransitionProject() = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000), clip(3, 4_000)))
+        .setTransition(0, Transition(TransitionType.RIPPLE, 1_000))
+        .setTransition(1, Transition(TransitionType.BLUR, 1_000))
+
+    @Test fun eachTransitionStaysInItsOwnWindowAndTheMiddleIsNormalFootage() {
+        val p = twoTransitionProject()
+        // THE regression: scrubbing the middle clip between the two cuts shows NO transition.
+        for (t in 4_600L..7_400L step 100L) {
+            assertTrue(uniformsAt(p, t).isIdentity, "middle of the clip at t=$t must be plain footage (no transition)")
+        }
+        // Ripple only around the first cut (4000), blur only around the second (8000).
+        for (t in listOf(3_900L, 4_000L, 4_100L)) {
+            val u = uniformsAt(p, t)
+            assertTrue(u.ripple > 0f && u.blur == 0f, "t=$t is inside the Ripple window only")
+        }
+        for (t in listOf(7_900L, 8_000L, 8_100L)) {
+            val u = uniformsAt(p, t)
+            assertTrue(u.blur > 0f && u.ripple == 0f, "t=$t is inside the Blur window only")
+        }
+        // Well outside either window — before the first cut and after the second — is plain footage.
+        for (t in (0L..3_300L step 300L) + (8_700L..11_900L step 300L)) {
+            assertTrue(uniformsAt(p, t).isIdentity, "t=$t is outside both transitions and must be plain footage")
+        }
+    }
+
+    @Test fun neitherTransitionEverLeaksOutsideItsDuration() {
+        val p = twoTransitionProject()
+        for (t in 0L..11_990L step 10L) {
+            val u = uniformsAt(p, t)
+            if (u.ripple > 0f) assertTrue(t in 3_500L..4_500L, "Ripple appeared at t=$t, outside its window")
+            if (u.blur > 0f) assertTrue(t in 7_500L..8_500L, "Blur appeared at t=$t, outside its window")
+            // The two transitions never render at the same time.
+            assertTrue(!(u.ripple > 0f && u.blur > 0f), "Ripple and Blur overlapped at t=$t")
+        }
+    }
+
+    @Test fun forwardAndBackwardScrubAcrossBothTransitionsAgree() {
+        val p = twoTransitionProject()
+        val positions = (0L..11_990L step 70L).toList()
+        val forward = positions.map { uniformsAt(p, it) }
+        val backward = positions.reversed().map { uniformsAt(p, it) }.reversed()
+        assertEquals(forward, backward, "every position renders identically whichever way it is scrubbed")
+    }
+
+    @Test fun jumpingDirectlyBetweenPositionsIsConsistent() {
+        val p = twoTransitionProject()
+        // Jump before → between → after → back, in a non-monotonic order (random-access, like tapping
+        // the timeline). Each position must evaluate the same as computing it in isolation.
+        val before = uniformsAt(p, 2_000); val rip = uniformsAt(p, 4_000)
+        val between = uniformsAt(p, 6_000); val blur = uniformsAt(p, 8_000)
+        val after = uniformsAt(p, 10_000)
+        for ((t, expected) in listOf(10_000L to after, 4_000L to rip, 2_000L to before, 8_000L to blur, 6_000L to between,
+                                     6_000L to between, 4_000L to rip)) {
+            assertEquals(expected, uniformsAt(p, t), "jump to t=$t must match its isolated value")
+        }
+        assertTrue(before.isIdentity && between.isIdentity && after.isIdentity)
+        assertTrue(rip.ripple > 0f && blur.blur > 0f)
+    }
+
+    // ---- Which paused/scrub frames use the composed CPU preview ----
+
+    @Test fun composedPreviewUsedOnlyForTransitionBearingVideoClips() {
+        val p = twoTransitionProject()
+        // All three clips carry a transition on at least one edge → composed preview throughout.
+        for (t in listOf(1_000L, 4_000L, 6_000L, 8_000L, 10_000L)) {
+            assertTrue(p.usesComposedTransitionPreview(t), "t=$t is on a transition-bearing clip")
+        }
+        // A project with no transitions keeps the full-resolution GPU preview everywhere.
+        val plain = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000)))
+        for (t in listOf(0L, 2_000L, 5_000L, 7_000L)) {
+            assertTrue(!plain.usesComposedTransitionPreview(t), "no transition at t=$t → GPU full-res preview")
+        }
+    }
+
+    @Test fun transitionFreeMiddleClipKeepsGpuPreview() {
+        // Five clips; transitions only at the far ends. The middle clip (index 2) touches no transition.
+        val p = VideoProject(listOf(clip(1, 4_000), clip(2, 4_000), clip(3, 4_000), clip(4, 4_000), clip(5, 4_000)))
+            .setTransition(0, Transition(TransitionType.RIPPLE, 1_000))
+            .setTransition(3, Transition(TransitionType.BLUR, 1_000))
+        // Clip index 2 spans timeline 8000..11999.
+        for (t in 8_200L..11_800L step 200L) {
+            assertTrue(!p.usesComposedTransitionPreview(t), "t=$t is on the transition-free middle clip → GPU preview")
+            assertTrue(uniformsAt(p, t).isIdentity, "and it is plain footage")
+        }
+        // The end clips still use the composed preview.
+        assertTrue(p.usesComposedTransitionPreview(1_000L) && p.usesComposedTransitionPreview(19_000L))
+    }
+
     // ---- render helpers (same approach as TransitionCpuTest) ----
 
     private val w = 48

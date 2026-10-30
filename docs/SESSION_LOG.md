@@ -824,3 +824,36 @@ unreliable.
   backwards-scrub now shows the correct frame, and the same for other transitions; (2) scrub
   responsiveness on blur-heavy transitions (Blur/Cross zoom) given the CPU render; (3) exported video
   shows at the top of Today with its original capture date in Details.
+
+## 2026-10-31 — Session 34 (v0.4.25-media3) — multiple-transition scrubbing fix
+- Shane (Fold5) found a second scrub bug: Ripple at cut 1 + Blur at cut 2; scrubbing back from Blur,
+  Ripple persisted across the whole middle clip instead of plain footage between the two transitions.
+- Investigated before changing anything. Root cause is in the GPU preview path, NOT the v0.4.24 CPU fix:
+  * On a full-effects device simplifiedPreview=false, so the composed CPU frame (v0.4.24) is NOT used on
+    the Fold5 during scrub (VideoEditorScreen gate was `simplifiedPreview && !playing && !loading`). The
+    Fold5 scrub frame comes from the live CompositionPlayer → ClipTransitionEffect.
+  * ClipTransitionEffect (fixedTimeMs=null path) derives clip time from firstUs = "first frame the shader
+    instance saw", set once, never reset. Correct for ordered playback/export; wrong under random-access
+    seeking. A wrong/negative clip-relative t makes ClipEdge.sampleAt's incoming edge (1 - t/inMs) clamp to
+    1 → full incoming transition across the whole clip → Ripple floods clip 2's middle.
+  * Needs BOTH multiple transitions AND scrubbing; single-transition and ordered playback/export fine.
+- Fix (approved; GPU playback + export untouched): drive the paused/scrub still from the position-accurate
+  composed CPU frame on ALL devices when the clip under the playhead is a VIDEO clip carrying a transition.
+  * New pure VideoProject.usesComposedTransitionPreview(timelineMs): clip is video && clipEdge.isActive.
+  * VideoEditorScreen: new local useComposedAt(pos) = !playing && !loading && (simplifiedPreview ||
+    project.usesComposedTransitionPreview(pos)); used for both the composedTick trigger and the render
+    gate. Overlay display (composedFrame?.let) was already device-agnostic; banner stays simplified-only.
+  * ClipTransitionEffect, CompositionPlayer, ProjectComposer export path, FramePreviewRenderer, TransitionCpu
+    all UNCHANGED. Live playback still GPU; export identical.
+- Behaviour: transition-free video clips keep the full-res GPU paused frame. Image clips with a transition
+  still use the GPU while paused (composed path is video-only) — known limit, logged for a later phase.
+- Tests: +6 core (119 total, all pass via tools/core-test.sh). TransitionScrubTest multi-transition suite:
+  middle-is-identity regression, neither transition leaks outside its window (10 ms sweep), forward==backward,
+  random-access jumps consistent, usesComposedTransitionPreview only for transition-bearing video clips,
+  transition-free middle clip keeps GPU preview.
+- versionCode 31 / 0.4.25-media3. main/v0.4.15 untouched; permanent key; package/identity/credit/no-INTERNET
+  all preserved. CHANGELOG + in-app guide updated.
+- HONEST / device-check: core logic unit-verified; app module compiles+builds in CI. Needs Fold5 confirmation:
+  (1) Ripple+Blur both confined to their own cuts, plain footage between, backward & forward & jumps;
+  (2) scrub smoothness now that transition clips render composed CPU frames on the Fold5 (Snapdragon should
+  be fine; 540px cap for blur). Transition-free clips unchanged (still GPU).

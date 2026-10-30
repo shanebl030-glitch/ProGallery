@@ -2,6 +2,27 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.25-media3] — 2026-10-31 — Multiple-transition scrubbing fix — DEVICE-TEST BUILD
+
+Fixes a second transition-scrubbing problem found on the Galaxy Z Fold5 with two transitions on one
+timeline. Branch build; not on `main`. GPU playback and the export pipeline are **completely
+untouched**; the only change is which frame drives the paused/scrub preview.
+
+### Transitions no longer leak between cuts while scrubbing
+With a Ripple at one cut and a Blur at a later cut, scrubbing back from the Blur made the Ripple persist
+across the whole middle of the clip instead of showing the normal footage between the two transitions.
+- Root cause: on a full-effects device the paused/scrub frame comes from the live GPU `CompositionPlayer`,
+  whose per-clip transition timing is derived from frame-relative timing that is only correct for ordered
+  playback. Under random-access scrubbing that timing is wrong, and an incoming transition can evaluate as
+  fully active across the entire clip. (Independent of the v0.4.24 Ripple fix, which was already correct.)
+- Fix: the paused/scrub still is now drawn from the position-accurate **composed CPU frame** — the same
+  one introduced in v0.4.24 — not just in Safe/simplified mode but on **all** devices whenever the clip
+  under the playhead is a video clip carrying a transition. That frame computes each transition from the
+  exact playhead position, so every transition stays inside its own window and the footage between two
+  transitions shows plain. Live GPU playback and export are unchanged.
+- Transition-free video clips keep the full-resolution GPU preview while paused. Image clips with a
+  transition still use the GPU path while paused (the composed path is video-only) — a known limit.
+
 ## [0.4.24-media3] — 2026-10-31 — Ripple backwards-scrub fix + exported videos in Today — DEVICE-TEST BUILD
 
 Two targeted fixes. Branch build; not on `main`. Fold5 full-effects playback, the MediaTek

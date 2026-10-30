@@ -338,9 +338,16 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
         while (showSyncDebug) { playerPosMs = preview.currentPositionMs; delay(120) }
     }
     // ---- Composed-frame preview driver (see frameRenderer above) --------------------------------
+    // Decide when the paused/scrub still is drawn from the composed CPU frame rather than the live GPU
+    // player. Always in simplified mode (the raw player shows no effects); and, on a full-effects device,
+    // while paused over a VIDEO clip that carries a transition — the GPU player's frame-relative
+    // transition timing is unreliable under scrubbing, so the position-accurate composed frame is used
+    // there instead. Transition-free (and image) clips keep the full-resolution GPU preview.
+    fun useComposedAt(pos: Long): Boolean =
+        !playing && !loading && (simplifiedPreview || vm.project.usesComposedTransitionPreview(pos))
     // Request a new composed frame whenever the playhead moves or the overlay state changes…
     LaunchedEffect(Unit) {
-        snapshotFlow { positionMs to (simplifiedPreview && !playing && !loading) }
+        snapshotFlow { positionMs to useComposedAt(positionMs) }
             .collect { composedTick.value = composedTick.value + 1 }
     }
     // …and when the project is edited (transition added, duration/strength/colour changed).
@@ -354,7 +361,7 @@ private fun VideoEditorContent(open: VideoOpen, pickerItems: List<MediaItem>, on
     // position.
     LaunchedEffect(Unit) {
         composedTick.collect {
-            composedFrame = if (simplifiedPreview && !playing && !loading) {
+            composedFrame = if (useComposedAt(positionMs)) {
                 frameRenderer.render(vm.project, positionMs, /* maxShortSidePx = */ 720)?.asImageBitmap()
             } else {
                 null
