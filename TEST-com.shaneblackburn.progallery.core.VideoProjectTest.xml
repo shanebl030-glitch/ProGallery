@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.VideoProjectTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:52" hostname="runnervm48cm3" time="0.007">
+  <properties/>
+  <testcase name="cutUnwantedMiddleSection" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="fullEditingWorkflowStaysConsistent" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.001"/>
+  <testcase name="orientation" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="frameStepping" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="locate" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="perClipTransitionEdges" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="simpleTimelinePositionClampsIndexAndBounds" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="splitAndRemoveKeepTransitionsAligned" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="durationWithTrimAndSpeed" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="transitionProgressAtPreviewFrameMatchesOutputTime" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.001"/>
+  <testcase name="simpleTimelineRoundTrips" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.001"/>
+  <testcase name="moveClip" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="framePreviewSpecScalesSourceOffsetBySpeed" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.001"/>
+  <testcase name="framePreviewSpecMapsClipSourceOffsetAndInClipTime" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="simpleTimelinePositionDividesBySpeed" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="audioEnvelope" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="fadesAndTransitions" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.001"/>
+  <testcase name="trimIsClamped" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="simpleTimelinePositionAddsEarlierClips" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="simpleTimelineMapsAcrossClipsAndSpeed" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="textTiming" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="trimAfterSplitIsIndependent" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <testcase name="transitionDurationSetsExportWindow" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.001"/>
+  <testcase name="splitRespectsSpeedWhenMappingSource" classname="com.shaneblackburn.progallery.core.VideoProjectTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

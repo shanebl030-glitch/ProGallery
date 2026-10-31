@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.StableOrderTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:51" hostname="runnervm48cm3" time="0.002">
+  <properties/>
+  <testcase name="emptyFrozenOrderReturnsLiveListUnchanged" classname="com.shaneblackburn.progallery.core.StableOrderTest" time="0.001"/>
+  <testcase name="keepsFrozenOrderWhenTheLiveListReshuffles" classname="com.shaneblackburn.progallery.core.StableOrderTest" time="0.001"/>
+  <testcase name="handlesEmptyLiveList" classname="com.shaneblackburn.progallery.core.StableOrderTest" time="0.0"/>
+  <testcase name="appendsGenuinelyNewItemsAtTheEndInLiveOrder" classname="com.shaneblackburn.progallery.core.StableOrderTest" time="0.0"/>
+  <testcase name="dropsItemsThatNoLongerExist" classname="com.shaneblackburn.progallery.core.StableOrderTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,6 @@
+== ProGallery-0.4.28.apk
+V2 Signer: certificate SHA-256 digest: b00aa037dc05404084bc960f5553144bd3b57eb47b5a74354e95963debac784c
+== app-debug-androidTest.apk
+V2 Signer: certificate SHA-256 digest: 340ed29dbf59d3c77e065d9e7c39d68a1f09e1629e149d188b7f43c043d7e5bb
+== app-debug.apk
+V2 Signer: certificate SHA-256 digest: 340ed29dbf59d3c77e065d9e7c39d68a1f09e1629e149d188b7f43c043d7e5bb

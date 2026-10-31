@@ -1,0 +1,314 @@
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/CrashReporter.kt:86: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+            ?.commit()
+              ~~~~~~~~
+
+   Explanation for issues of type "ApplySharedPref":
+   Consider using apply() instead of commit on shared preferences. Whereas
+   commit blocks and writes its data to persistent storage immediately, apply
+   will handle it in the background.
+
+/home/runner/work/ProGallery/ProGallery/app/build.gradle.kts:24: Warning: Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the android.os.Build.VERSION_CODES javadoc for details. [OldTargetApi]
+        targetSdk = 35
+        ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "OldTargetApi":
+   When your application runs on a version of Android that is more recent than
+   your targetSdkVersion specifies that it has been tested with, various
+   compatibility modes kick in. This ensures that your application continues
+   to work, but it may look out of place. For example, if the targetSdkVersion
+   is less than 14, your app may get an option button in the UI.
+
+   To fix this issue, set the targetSdkVersion to the highest available value.
+   Then test your app to make sure everything works correctly. You may want to
+   consult the compatibility notes to see what changes apply to each version
+   you are adding support for:
+   https://developer.android.com/reference/android/os/Build.VERSION_CODES.html
+   as well as follow this guide:
+   https://developer.android.com/distribute/best-practices/develop/target-sdk.
+   html
+
+   https://developer.android.com/distribute/best-practices/develop/target-sdk.html
+
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/ui/Diagnostics.kt:75: Warning: Consider adding a <queries> declaration to your manifest when calling this method; see https://g.co/dev/packagevisibility for details [QueryPermissionsNeeded]
+    if (intent.resolveActivity(context.packageManager) != null) {
+               ~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "QueryPermissionsNeeded":
+   Apps that target Android 11 cannot query or interact with other installed
+   apps by default. If you need to query or interact with other installed
+   apps, you may need to add a <queries> declaration in your manifest.
+
+   As a corollary, the methods PackageManager#getInstalledPackages and
+   PackageManager#getInstalledApplications will no longer return information
+   about all installed apps. To query specific apps or types of apps, you can
+   use methods like PackageManager#getPackageInfo or
+   PackageManager#queryIntentActivities.
+
+   https://g.co/dev/packagevisibility
+
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:2: Warning: A newer version of com.android.application than 8.7.3 is available: 9.5.0 [AndroidGradlePluginVersion]
+agp = "8.7.3"
+      ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:2: Warning: A newer version of com.android.application than 8.7.3 is available: 9.5.0 [AndroidGradlePluginVersion]
+agp = "8.7.3"
+      ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:2: Warning: A newer version of com.android.application than 8.7.3 is available: 9.5.0 [AndroidGradlePluginVersion]
+agp = "8.7.3"
+      ~~~~~~~
+
+   Explanation for issues of type "AndroidGradlePluginVersion":
+   This detector looks for usage of the Android Gradle Plugin where the
+   version you are using is not the current stable release. Using older
+   versions is fine, and there are cases where you deliberately want to stick
+   with an older version. However, you may simply not be aware that a more
+   recent version is available, and that is what this lint check helps find.
+
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:4: Warning: A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.1 [GradleDependency]
+coreKtx = "1.15.0"
+          ~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:4: Warning: A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.1 [GradleDependency]
+coreKtx = "1.15.0"
+          ~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:4: Warning: A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.1 [GradleDependency]
+coreKtx = "1.15.0"
+          ~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:5: Warning: A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0 [GradleDependency]
+activityCompose = "1.9.3"
+                  ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:5: Warning: A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0 [GradleDependency]
+activityCompose = "1.9.3"
+                  ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:5: Warning: A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0 [GradleDependency]
+activityCompose = "1.9.3"
+                  ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:6: Warning: A newer version of androidx.compose:compose-bom than 2024.12.01 is available: 2026.09.00 [GradleDependency]
+composeBom = "2024.12.01"
+             ~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:6: Warning: A newer version of androidx.compose:compose-bom than 2024.12.01 is available: 2026.09.00 [GradleDependency]
+composeBom = "2024.12.01"
+             ~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:6: Warning: A newer version of androidx.compose:compose-bom than 2024.12.01 is available: 2026.09.00 [GradleDependency]
+composeBom = "2024.12.01"
+             ~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-process than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-process than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-process than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:7: Warning: A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0 [GradleDependency]
+lifecycle = "2.8.7"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:8: Warning: A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.10.2 [GradleDependency]
+navigation = "2.8.5"
+             ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:8: Warning: A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.10.2 [GradleDependency]
+navigation = "2.8.5"
+             ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:8: Warning: A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.10.2 [GradleDependency]
+navigation = "2.8.5"
+             ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:12: Warning: A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.3.0 [GradleDependency]
+datastore = "1.1.1"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:12: Warning: A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.3.0 [GradleDependency]
+datastore = "1.1.1"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:12: Warning: A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.3.0 [GradleDependency]
+datastore = "1.1.1"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:13: Warning: A newer version of androidx.exifinterface:exifinterface than 1.3.7 is available: 1.4.2 [GradleDependency]
+exifinterface = "1.3.7"
+                ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:13: Warning: A newer version of androidx.exifinterface:exifinterface than 1.3.7 is available: 1.4.2 [GradleDependency]
+exifinterface = "1.3.7"
+                ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:13: Warning: A newer version of androidx.exifinterface:exifinterface than 1.3.7 is available: 1.4.2 [GradleDependency]
+exifinterface = "1.3.7"
+                ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:15: Warning: A newer version of androidx.fragment:fragment-ktx than 1.8.5 is available: 1.9.1 [GradleDependency]
+fragment = "1.8.5"
+           ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:15: Warning: A newer version of androidx.fragment:fragment-ktx than 1.8.5 is available: 1.9.1 [GradleDependency]
+fragment = "1.8.5"
+           ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:15: Warning: A newer version of androidx.fragment:fragment-ktx than 1.8.5 is available: 1.9.1 [GradleDependency]
+fragment = "1.8.5"
+           ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:18: Warning: A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0 [GradleDependency]
+androidxJunit = "1.2.1"
+                ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:18: Warning: A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0 [GradleDependency]
+androidxJunit = "1.2.1"
+                ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:18: Warning: A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0 [GradleDependency]
+androidxJunit = "1.2.1"
+                ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:19: Warning: A newer version of androidx.test.espresso:espresso-core than 3.6.1 is available: 3.7.0 [GradleDependency]
+espresso = "3.6.1"
+           ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:19: Warning: A newer version of androidx.test.espresso:espresso-core than 3.6.1 is available: 3.7.0 [GradleDependency]
+espresso = "3.6.1"
+           ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:19: Warning: A newer version of androidx.test.espresso:espresso-core than 3.6.1 is available: 3.7.0 [GradleDependency]
+espresso = "3.6.1"
+           ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:20: Warning: A newer version of androidx.test:runner than 1.6.2 is available: 1.7.0 [GradleDependency]
+testRunner = "1.6.2"
+             ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:20: Warning: A newer version of androidx.test:runner than 1.6.2 is available: 1.7.0 [GradleDependency]
+testRunner = "1.6.2"
+             ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:20: Warning: A newer version of androidx.test:runner than 1.6.2 is available: 1.7.0 [GradleDependency]
+testRunner = "1.6.2"
+             ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:21: Warning: A newer version of androidx.test:rules than 1.6.1 is available: 1.7.0 [GradleDependency]
+testRules = "1.6.1"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:21: Warning: A newer version of androidx.test:rules than 1.6.1 is available: 1.7.0 [GradleDependency]
+testRules = "1.6.1"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:21: Warning: A newer version of androidx.test:rules than 1.6.1 is available: 1.7.0 [GradleDependency]
+testRules = "1.6.1"
+            ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:22: Warning: A newer version of androidx.test.uiautomator:uiautomator than 2.3.0 is available: 2.4.0 [GradleDependency]
+uiautomator = "2.3.0"
+              ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:22: Warning: A newer version of androidx.test.uiautomator:uiautomator than 2.3.0 is available: 2.4.0 [GradleDependency]
+uiautomator = "2.3.0"
+              ~~~~~~~
+/home/runner/work/ProGallery/ProGallery/gradle/libs.versions.toml:22: Warning: A newer version of androidx.test.uiautomator:uiautomator than 2.3.0 is available: 2.4.0 [GradleDependency]
+uiautomator = "2.3.0"
+              ~~~~~~~
+
+   Explanation for issues of type "GradleDependency":
+   This detector looks for usages of libraries where the version you are using
+   is not the current stable release. Using older versions is fine, and there
+   are cases where you deliberately want to stick with an older version.
+   However, you may simply not be aware that a more recent version is
+   available, and that is what this lint check helps find.
+
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoTimeline.kt:86: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+    modifier: Modifier = Modifier,
+    ~~~~~~~~
+
+   Explanation for issues of type "ModifierParameter":
+   The first (or only) Modifier parameter in a Composable function should
+   follow the following rules:
+   - Be named modifier
+   - Have a type of Modifier
+   - Either have no default value, or have a default value of Modifier
+   - If optional, be the first optional parameter in the parameter list
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/editor/EditSaver.kt:171: Warning: This Cursor should be freed up after use with #close() [Recycle]
+            resolver.query(
+                     ~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/data/MediaActions.kt:172: Warning: This InputStream should be freed up after use with #close() [Recycle]
+            resolver.openInputStream(Uri.parse(item.uri)).use { input ->
+                     ~~~~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/data/MediaActions.kt:173: Warning: This OutputStream should be freed up after use with #close() [Recycle]
+                resolver.openOutputStream(dest, "w").use { output ->
+                         ~~~~~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/data/MediaActions.kt:192: Warning: This Cursor should be freed up after use with #close() [Recycle]
+            resolver.query(
+                     ~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/data/MetadataReader.kt:65: Warning: This InputStream should be freed up after use with #close() [Recycle]
+            ?: resolver.openInputStream(Uri.parse(item.uri))
+                        ~~~~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/VideoEditorViewModel.kt:317: Warning: This Cursor should be freed up after use with #close() [Recycle]
+            getApplication<Application>().contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                                                          ~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/VideoExportManager.kt:181: Warning: This Cursor should be freed up after use with #close() [Recycle]
+            context.contentResolver.query(
+                                    ~~~~~
+
+   Explanation for issues of type "Recycle":
+   Many resources, such as TypedArrays, VelocityTrackers, etc., should be
+   recycled (with a recycle() call) after use. This lint check looks for
+   missing recycle() calls.
+
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/CrashReporter.kt:107: Warning: Unnecessary; SDK_INT is always >= 29 [ObsoleteSdkInt]
+        val code = if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else @Suppress("DEPRECATION") pi.versionCode.toLong()
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ObsoleteSdkInt":
+   This check flags version checks that are not necessary, because the
+   minSdkVersion (or surrounding known API level) is already at least as high
+   as the version checked for.
+
+   Similarly, it also looks for resources in -vNN folders, such as values-v14
+   where the version qualifier is less than or equal to the minSdkVersion,
+   where the contents should be merged into the best folder.
+
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/CrashReporter.kt:12: Warning: Do not place Android context classes in static fields (static reference to CrashReporter which has field appCtx pointing to Context); this is a memory leak [StaticFieldLeak]
+/**
+^
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/CrashReporter.kt:38: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    private var appCtx: Context? = null
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "StaticFieldLeak":
+   A static field will leak contexts.
+
+   Non-static inner classes have an implicit reference to their outer class.
+   If that outer class is for example a Fragment or Activity, then this
+   reference means that the long-running handler/loader/task will hold a
+   reference to the activity which prevents it from getting garbage
+   collected.
+
+   Similarly, direct field references to activities and fragments from these
+   longer running instances can cause leaks.
+
+   ViewModel classes should never point to Views or non-application Contexts.
+
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/editor/ui/EditorPanels.kt:323: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var channel by rememberSaveable { mutableStateOf(0) } // 0 RGB, 1 R, 2 G, 3 B
+                                      ~~~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoTimeline.kt:92: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var dragIndex by remember { mutableStateOf(-1) }
+                                ~~~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoTools.kt:295: Information: Prefer mutableFloatStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var dragMs by remember(current.type) { mutableStateOf(current.durationMs.toFloat()) }
+                                           ~~~~~~~~~~~~~~
+/home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoTools.kt:384: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var step by remember(current) { mutableStateOf(0) }
+                                    ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "AutoboxingStateCreation":
+   Calling mutableStateOf<T>() when T is either backed by a primitive type on
+   the JVM or is a value class results in a state implementation that requires
+   all state values to be boxed. This usually causes an additional allocation
+   for each state write, and adds some additional work to auto-unbox values
+   when reading the value of the state. Instead, prefer to use a specialized
+   primitive state implementation for Int, Long, Float, and Double when the
+   state does not need to track null values and does not override the default
+   SnapshotMutationPolicy. See mutableIntStateOf(), mutableLongStateOf(),
+   mutableFloatStateOf(), and mutableDoubleStateOf() for more information.
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.runtime
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+0 errors, 62 warnings

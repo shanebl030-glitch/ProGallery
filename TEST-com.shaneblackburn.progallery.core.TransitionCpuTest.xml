@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.TransitionCpuTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:51" hostname="runnervm48cm3" time="0.087">
+  <properties/>
+  <testcase name="identityAtEdgeZeroForEverySelectableType" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.025"/>
+  <testcase name="blurSoftensDetail" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.013"/>
+  <testcase name="zoomInMagnifiesZoomOutRevealsBlack" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.002"/>
+  <testcase name="effectGrowsWithEdge" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.007"/>
+  <testcase name="lightLeakBrightens" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.003"/>
+  <testcase name="crossDissolveIsNotRenderablePerClip" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.0"/>
+  <testcase name="wipeAndIrisCoverToBlack" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.005"/>
+  <testcase name="whipAndPushMoveTheFrame" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.001"/>
+  <testcase name="fadeReachesBlackAndWhite" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.002"/>
+  <testcase name="glitchDisplacesPixels" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.004"/>
+  <testcase name="spinPixelateShakeRippleTransform" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.015"/>
+  <testcase name="crossZoomBlursAndFlashes" classname="com.shaneblackburn.progallery.core.TransitionCpuTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

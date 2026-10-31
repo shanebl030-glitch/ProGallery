@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.EditTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:51" hostname="runnervm48cm3" time="0.429">
+  <properties/>
+  <testcase name="saturationAndMono" classname="com.shaneblackburn.progallery.core.EditTest" time="0.009"/>
+  <testcase name="neutralNonIdentityPathIsLossless" classname="com.shaneblackburn.progallery.core.EditTest" time="0.012"/>
+  <testcase name="geometryMath" classname="com.shaneblackburn.progallery.core.EditTest" time="0.001"/>
+  <testcase name="curves" classname="com.shaneblackburn.progallery.core.EditTest" time="0.004"/>
+  <testcase name="hslTargetsOnlyItsBand" classname="com.shaneblackburn.progallery.core.EditTest" time="0.001"/>
+  <testcase name="identityIsUntouched" classname="com.shaneblackburn.progallery.core.EditTest" time="0.001"/>
+  <testcase name="toneLutIsMonotonicForExtremeSettings" classname="com.shaneblackburn.progallery.core.EditTest" time="0.01"/>
+  <testcase name="serialRenderMatchesParallel" classname="com.shaneblackburn.progallery.core.EditTest" time="0.054"/>
+  <testcase name="temperatureShiftsChannels" classname="com.shaneblackburn.progallery.core.EditTest" time="0.0"/>
+  <testcase name="frameLayout" classname="com.shaneblackburn.progallery.core.EditTest" time="0.001"/>
+  <testcase name="everyLookRendersWithinRange" classname="com.shaneblackburn.progallery.core.EditTest" time="0.005"/>
+  <testcase name="stripRenderingIsSeamFree" classname="com.shaneblackburn.progallery.core.EditTest" time="0.32"/>
+  <testcase name="lookCombineClampsToSliderRange" classname="com.shaneblackburn.progallery.core.EditTest" time="0.0"/>
+  <testcase name="exposureAndBrightnessBrighten" classname="com.shaneblackburn.progallery.core.EditTest" time="0.001"/>
+  <testcase name="exposureRollsOffInsteadOfClipping" classname="com.shaneblackburn.progallery.core.EditTest" time="0.0"/>
+  <testcase name="adjustKeysRoundTrip" classname="com.shaneblackburn.progallery.core.EditTest" time="0.0"/>
+  <testcase name="renderCanBeCancelled" classname="com.shaneblackburn.progallery.core.EditTest" time="0.004"/>
+  <testcase name="alphaIsPreserved" classname="com.shaneblackburn.progallery.core.EditTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

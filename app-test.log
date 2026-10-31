@@ -1,0 +1,59 @@
+> Task :core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :core:compileKotlin UP-TO-DATE
+> Task :core:compileJava NO-SOURCE
+> Task :core:processResources NO-SOURCE
+> Task :core:classes UP-TO-DATE
+> Task :core:jar UP-TO-DATE
+> Task :app:checkDebugAarMetadata
+> Task :app:generateDebugResValues
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:mergeDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+
+> Task :app:processDebugMainManifest
+/home/runner/work/ProGallery/ProGallery/app/src/main/AndroidManifest.xml:22:5-87 Warning:
+	uses-permission#android.permission.INTERNET was tagged at AndroidManifest.xml:22 to remove other declarations but no other declaration present
+
+> Task :app:processDebugManifest
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebug
+> Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+
+> Task :app:compileDebugKotlin
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/editor/ui/EditorPanels.kt:209:118 'val Icons.Outlined.RotateLeft: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.RotateLeft.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/editor/ui/EditorPanels.kt:210:117 'val Icons.Outlined.RotateRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.RotateRight.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/editor/ui/EditorScreen.kt:99:37 'val Icons.Outlined.ShowChart: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.ShowChart.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/ui/ProGalleryRoot.kt:117:21 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/ui/viewer/VideoPlayer.kt:117:21 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ProjectComposer.kt:18:8 'class SpeedChangeEffect : Any, GlEffect' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ProjectComposer.kt:233:39 'constructor(p0: Float): SpeedChangeEffect' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/VideoEditorViewModel.kt:104:64 This declaration is in a preview state and can be changed in a backwards-incompatible manner with a best-effort migration. Its usage should be marked with '@kotlinx.coroutines.FlowPreview' or '@OptIn(kotlinx.coroutines.FlowPreview::class)' if you accept the drawback of relying on preview API
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/VideoEffects.kt:226:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Please add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoEditorScreen.kt:254:21 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoEditorScreen.kt:264:14 This declaration is in a preview state and can be changed in a backwards-incompatible manner with a best-effort migration. Its usage should be marked with '@kotlinx.coroutines.FlowPreview' or '@OptIn(kotlinx.coroutines.FlowPreview::class)' if you accept the drawback of relying on preview API
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoEditorScreen.kt:292:42 This declaration is in a preview state and can be changed in a backwards-incompatible manner with a best-effort migration. Its usage should be marked with '@kotlinx.coroutines.FlowPreview' or '@OptIn(kotlinx.coroutines.FlowPreview::class)' if you accept the drawback of relying on preview API
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoEditorScreen.kt:355:62 This declaration is in a preview state and can be changed in a backwards-incompatible manner with a best-effort migration. Its usage should be marked with '@kotlinx.coroutines.FlowPreview' or '@OptIn(kotlinx.coroutines.FlowPreview::class)' if you accept the drawback of relying on preview API
+w: file:///home/runner/work/ProGallery/ProGallery/app/src/main/java/com/shaneblackburn/progallery/video/ui/VideoTools.kt:117:57 'val Icons.Outlined.RotateRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Outlined.RotateRight.
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+> Task :app:testDebugUnitTest
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/apptest-1793408752968.json
+
+BUILD SUCCESSFUL in 34s
+26 actionable tasks: 23 executed, 1 from cache, 2 up-to-date

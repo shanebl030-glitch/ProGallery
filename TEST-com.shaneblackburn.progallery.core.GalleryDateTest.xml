@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.GalleryDateTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:51" hostname="runnervm48cm3" time="0.029">
+  <properties/>
+  <testcase name="exportedVideoAppearsUnderTodayAtTheTopThenSettlesNextDay" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.028"/>
+  <testcase name="doesNotBoostMediaAddedBeforeToday" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.0"/>
+  <testcase name="dateAddedAndDateModifiedSortsAreUnaffected" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.0"/>
+  <testcase name="usesLocalDateInTheGivenZone" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.001"/>
+  <testcase name="fallsBackWhenNoAddDate" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.0"/>
+  <testcase name="doesNotBoostFutureCaptureDate" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.0"/>
+  <testcase name="doesNotBoostMediaCapturedToday" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.0"/>
+  <testcase name="boostsMediaAddedTodayWithOlderCaptureDate" classname="com.shaneblackburn.progallery.core.GalleryDateTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

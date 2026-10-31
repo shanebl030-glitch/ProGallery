@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.QueryTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:51" hostname="runnervm48cm3" time="0.023">
+  <properties/>
+  <testcase name="filterRespectsTypesFavouritesAndHidden" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.0"/>
+  <testcase name="searchMatching" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.013"/>
+  <testcase name="smartCollections" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.002"/>
+  <testcase name="dateGroupingStructure" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.004"/>
+  <testcase name="sortIsTotalAndDirectional" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.001"/>
+  <testcase name="searchParsing" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.003"/>
+  <testcase name="dateGroupingLabels" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.0"/>
+  <testcase name="midnightBoundaryUsesLocalZone" classname="com.shaneblackburn.progallery.core.QueryTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

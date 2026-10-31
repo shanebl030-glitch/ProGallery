@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.UtilTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:52" hostname="runnervm48cm3" time="0.009">
+  <properties/>
+  <testcase name="durations" classname="com.shaneblackburn.progallery.core.UtilTest" time="0.001"/>
+  <testcase name="fileSizes" classname="com.shaneblackburn.progallery.core.UtilTest" time="0.001"/>
+  <testcase name="uniqueAndEditedNames" classname="com.shaneblackburn.progallery.core.UtilTest" time="0.003"/>
+  <testcase name="nameValidation" classname="com.shaneblackburn.progallery.core.UtilTest" time="0.002"/>
+  <testcase name="exifFormatting" classname="com.shaneblackburn.progallery.core.UtilTest" time="0.002"/>
+  <testcase name="recentList" classname="com.shaneblackburn.progallery.core.UtilTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

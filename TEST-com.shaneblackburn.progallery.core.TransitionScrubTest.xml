@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shaneblackburn.progallery.core.TransitionScrubTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T01:05:51" hostname="runnervm48cm3" time="0.025">
+  <properties/>
+  <testcase name="rippleIsDeterministicForwardsAndBackwards" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.002"/>
+  <testcase name="eachTransitionStaysInItsOwnWindowAndTheMiddleIsNormalFootage" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.001"/>
+  <testcase name="forwardAndBackwardScrubAcrossBothTransitionsAgree" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.001"/>
+  <testcase name="jumpingDirectlyBetweenPositionsIsConsistent" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.001"/>
+  <testcase name="wrongAnchorFloodsIncomingTransitionButTrueTimeDoesNot" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.0"/>
+  <testcase name="differentPositionsRenderVisiblyDifferentFrames" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.002"/>
+  <testcase name="neitherTransitionEverLeaksOutsideItsDuration" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.004"/>
+  <testcase name="rippleVariesAcrossTheWindowAndIsNotFrozen" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.0"/>
+  <testcase name="otherTransitionsAlsoVaryPerPositionNotFrozen" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.011"/>
+  <testcase name="clipStartPlusGlobalTimeReconstructsTrueClipTimeWithTrimAndSpeed" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.002"/>
+  <testcase name="composedPreviewUsedOnlyForTransitionBearingVideoClips" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.0"/>
+  <testcase name="transitionFreeMiddleClipKeepsGpuPreview" classname="com.shaneblackburn.progallery.core.TransitionScrubTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
