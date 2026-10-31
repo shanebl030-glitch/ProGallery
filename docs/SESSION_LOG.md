@@ -931,3 +931,21 @@ unreliable.
 - Device-check: confirm the 3s fade on play, tap-to-show, paused-stays-on, resume-fades behaviours on
   the phone. Minor known edge: if the speed dropdown is left open >3s during playback the controls can
   fade and close it (interaction resets the timer on open/select).
+
+## 2026-10-31 — Session 39 (v0.4.28-media3) — Recently viewed reshuffle fix
+- Shane: bug tapping a media in Library → Recently viewed. Root cause: ViewerScreen marks each item
+  viewed on settledPage (markViewed → RecentList.touch moves it to FRONT). For Recently viewed, whose
+  list IS recentIds order, this reorders the pager's list live → scrollToPage jump + scrambled swipe
+  neighbours; every swipe re-bumps → continuous reshuffle. Specific to Recently viewed (other collections
+  don't reorder on view).
+- Fix: freeze the viewer's order for the session when source == Smart(RECENTLY_VIEWED). Capture id order
+  from first load; render via new pure core StableOrder.stabilize(frozenIds, items): frozen order first
+  (deletes dropped), new items appended. markViewed still runs (recents stays current for next open).
+  Deletes still work via the existing currentId re-sync. Other sources unchanged (list = items).
+- New core: query/StableOrder.kt. +5 core tests (126 total, pass): keeps frozen order on reshuffle, drops
+  deleted, appends new in live order, empty-frozen passthrough, empty-live.
+- UI-only otherwise; no media3/export/pipeline change. versionCode 35 / 0.4.28-media3. main/v0.4.15
+  untouched; permanent key/package/identity/no-INTERNET preserved. CHANGELOG updated. CI filename
+  ProGallery-0.4.28.apk.
+- Device-check: open an item from Recently viewed — no jump; swipe left/right lands on the grid neighbours;
+  order stays stable through several swipes; deleting the current item still advances correctly.

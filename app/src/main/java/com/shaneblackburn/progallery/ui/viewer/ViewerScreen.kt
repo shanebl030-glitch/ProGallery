@@ -70,6 +70,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import coil.request.ImageRequest
 import com.shaneblackburn.progallery.core.model.MediaItem
 import com.shaneblackburn.progallery.ui.GalleryViewModel
+import com.shaneblackburn.progallery.core.query.SmartCollection
+import com.shaneblackburn.progallery.core.query.StableOrder
 import com.shaneblackburn.progallery.ui.MediaSource
 import com.shaneblackburn.progallery.ui.components.ConfirmDialog
 import com.shaneblackburn.progallery.ui.components.DeleteConfirm
@@ -107,7 +109,22 @@ fun ViewerScreen(
     val items by itemsFlow.collectAsState(initial = null)
     val settings by vm.settings.collectAsState()
     val albums by vm.allAlbums.collectAsState()
-    val list = items
+
+    // In Recently viewed, opening or swiping to an item marks it viewed, which moves it to the front of
+    // the recents list — reshuffling the very list the pager is flipping through. Freeze the order for
+    // this viewing session: capture the id order from the first load and keep rendering in that order so
+    // the pager doesn't jump and swipe neighbours stay put. Deletes still drop out; any genuinely new
+    // items are appended. Marking-viewed still updates recents in the background for next time.
+    val isRecentlyViewed = source is MediaSource.Smart && source.collection == SmartCollection.RECENTLY_VIEWED
+    val frozenOrder = remember { mutableStateOf<List<Long>?>(null) }
+    if (isRecentlyViewed && frozenOrder.value == null && !items.isNullOrEmpty()) {
+        frozenOrder.value = items!!.map { it.id }
+    }
+    val list: List<MediaItem>? = when {
+        items == null -> null
+        !isRecentlyViewed || frozenOrder.value == null -> items
+        else -> StableOrder.stabilize(frozenOrder.value!!, items!!)
+    }
 
     if (list == null) {
         Box(Modifier.fillMaxSize().background(Color.Black))

@@ -2,6 +2,16 @@
 
 All notable changes to ProGallery. Versions follow semantic versioning.
 
+## [0.4.28-media3] — 2026-10-31 — Fix: Recently viewed reshuffled when opening an item
+
+Opening (or swiping to) an item in Library → Recently viewed marked it viewed, which moved it to the
+front of the recents list — reshuffling the very list the viewer was paging through. The result was a
+jump as the item opened and scrambled swipe order (the neighbours no longer matched the grid, and each
+further swipe re-shuffled). Now the viewer freezes the order it opened with for that session, so paging
+stays stable; deleted items still drop out and any new items are appended. Items are still marked viewed
+in the background, so the Recently viewed order is up to date next time you open it. Only affects the
+Recently viewed collection.
+
 ## [0.4.27-media3] — 2026-10-31 — Auto-hiding video controls
 
 Video viewer: while a video is playing, the playback controls (−10 s, play/pause, +10 s, seek bar,
